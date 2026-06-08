@@ -11,6 +11,10 @@ const Company = require("../../models/personalOffice/companyModel.js");
 const mongoose = require("mongoose");
 const { generateAccessToken, generateRefreshToken } = require("../../service/service.js")
 const AccessRole = require("../../models/personalOffice/roleModel.js");
+const {
+  mapEmployeeStatusTransition,
+  publishEmployeeLifecycleEvent,
+} = require("../../service/employeeLifecycleEventService.js");
 
 
 
@@ -149,6 +153,15 @@ console.log(employee);
 await employee.save();
 
 console.log("========= EMPLOYEE SAVED =========");
+    await publishEmployeeLifecycleEvent({
+      eventType: "EmployeeCreated",
+      employee,
+      organizationId: companyId,
+      payload: {
+        sourceController: "addEmployee",
+        status: employee.status,
+      },
+    });
     await recentActivity.create({ title: "New Employee Added.", createdBy: userId, createdByRole: "Admin", companyId: companyId })
 
     return res.status(201).json({
@@ -275,9 +288,24 @@ const updateEmployeeStatus = async (req, res) => {
     const employee = await Employee.findOne({ _id: employeeId, createdBy: companyId });
     if (!employee) return res.status(404).json({ message: "Employee Not Found." });
 
+    const previousStatus = employee.status;
     employee.status = status;
     employee.relievingDate = null;
-    employee.save();
+    await employee.save();
+
+    const eventType = mapEmployeeStatusTransition(previousStatus, employee.status);
+    if (eventType) {
+      await publishEmployeeLifecycleEvent({
+        eventType,
+        employee,
+        organizationId: companyId,
+        payload: {
+          sourceController: "updateEmployeeStatus",
+          previousStatus,
+          nextStatus: employee.status,
+        },
+      });
+    }
     res.status(200).json({ message: "Employee Status Active Successfully." });
 
   }
@@ -386,6 +414,8 @@ console.log(req.body);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
+
+    const previousStatus = employee.status;
 
     if (updates.password) {
       // Check if new password is same as current password
@@ -523,6 +553,20 @@ console.log(req.body);
       { new: true }
     );
 
+    const eventType = mapEmployeeStatusTransition(previousStatus, updatedEmployee?.status);
+    if (eventType) {
+      await publishEmployeeLifecycleEvent({
+        eventType,
+        employee: updatedEmployee,
+        organizationId: updates.companyId,
+        payload: {
+          sourceController: "updateEmployee",
+          previousStatus,
+          nextStatus: updatedEmployee.status,
+        },
+      });
+    }
+
     if (historyEntries.length > 0) {
       await EmployeeHistory.insertMany(historyEntries);
     }
@@ -628,6 +672,17 @@ const deleteEmployee = async (req, res) => {
       return res.status(404).json({ message: "Employee not found or access denied" });
     }
 
+    await publishEmployeeLifecycleEvent({
+      eventType: "EmployeeDeleted",
+      employee: deletedEmployee,
+      organizationId: companyId,
+      eventVersion: Date.now(),
+      payload: {
+        sourceController: "deleteEmployee",
+        previousStatus: deletedEmployee.status,
+      },
+    });
+
     return res.status(200).json({ message: "Employee deleted successfully" });
   } catch (err) {
     return res.status(500).json({ message: "Server error" });
@@ -649,7 +704,7 @@ const relieveEmployee = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({ message: "companyId  is required" });
     }
-    const employee = await Employee.findByIdAndUpdate({ _id: id, createdBy: companyId });
+    const employee = await Employee.findOne({ _id: id, createdBy: companyId });
 
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
@@ -658,6 +713,8 @@ const relieveEmployee = async (req, res) => {
     if (employee.status === "RELIEVED") {
       return res.status(400).json({ message: "Employee is already relieved" });
     }
+
+    const previousStatus = employee.status;
 
     // Update employee status
     employee.status = "RELIEVED";
@@ -676,6 +733,19 @@ console.log(employee);
 await employee.save();
 
 console.log("========= EMPLOYEE SAVED =========");
+    const eventType = mapEmployeeStatusTransition(previousStatus, employee.status);
+    if (eventType) {
+      await publishEmployeeLifecycleEvent({
+        eventType,
+        employee,
+        organizationId: companyId,
+        payload: {
+          sourceController: "relieveEmployee",
+          previousStatus,
+          nextStatus: employee.status,
+        },
+      });
+    }
 
     await EmployeeHistory.create({
       employeeId: employee._id,
