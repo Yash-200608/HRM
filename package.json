@@ -14,13 +14,13 @@
   ],
   "scripts": {
     "build": "npm run build:subscription && npm run build:hrm:frontend",
-    "build:subscription": "npm --prefix Subscription run build",
-    "build:hrm:frontend": "npm --prefix new-hrm/frontend run build",
+    "build:subscription": "cd Subscription && npm run build",
+    "build:hrm:frontend": "cd new-hrm/frontend && npm run build",
     "check:hrm:backend": "node --check new-hrm/back/app.js",
     "typecheck": "npm run typecheck:subscription && npm run typecheck:hrm:frontend",
     "typecheck:subscription": "npm exec --prefix Subscription -- tsc -p Subscription/tsconfig.json --noEmit",
     "typecheck:hrm:frontend": "npm exec --prefix new-hrm/frontend -- tsc -b new-hrm/frontend/tsconfig.json",
-    "test:subscription": "npm --prefix Subscription test",
-    "lint:hrm:frontend": "npm --prefix new-hrm/frontend run lint"
+    "test:subscription": "cd Subscription && npm test",
+    "lint:hrm:frontend": "cd new-hrm/frontend && npm run lint"
   }
 }
