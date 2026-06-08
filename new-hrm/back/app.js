@@ -25,6 +25,7 @@ const taskRoutes = require("./routes/taskRoutes.js");
 const accessroleRoutes = require("./routes/roleRoutes");
 const resignationRoutes = require("./routes/resignationRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
+const { mountSubscriptionProxyRoutes } = require("./routes/subscriptionProxyRoutes.js");
 
 
 // job-portal
@@ -118,6 +119,9 @@ app.use("/api/message", messageRoutes);
 
 // super-admin
 app.use("/api/superAdmin/auth", superAdminRoutes);
+
+// subscription/billing API gateway
+mountSubscriptionProxyRoutes(app);
 
 app.use(express.static(path.join(__dirname, "build")));
 
