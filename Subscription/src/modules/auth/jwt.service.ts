@@ -44,9 +44,16 @@ export function verifyBearerToken(token: string) {
   return null;
 }
 
+function isAuthKind(value: unknown): value is AuthPrincipal['kind'] {
+  return value === 'user' || value === 'admin' || value === 'service' || value === 'organization';
+}
+
 function tryVerify(token: string, secret: string) {
   try {
     const payload = jwt.verify(token, secret) as SignedAccessTokenPayload;
+    if (!isAuthKind(payload.kind) || typeof payload.subject !== 'string') {
+      return null;
+    }
     if (payload.kind === 'admin' && secret !== env.ADMIN_JWT_SECRET) {
       return null;
     }

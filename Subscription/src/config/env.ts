@@ -3,6 +3,7 @@ import { z } from 'zod';
 const envInput = {
   ...process.env,
   MONGODB_URI: process.env.MONGODB_URI ?? process.env.MONGO_URI,
+  HRM_ACCESS_TOKEN_SECRET: process.env.HRM_ACCESS_TOKEN_SECRET ?? process.env.ACCESS_TOKEN_SECRET ?? '',
 };
 
 const envSchema = z.object({
@@ -12,6 +13,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
   ADMIN_JWT_SECRET: z.string().min(16),
+  HRM_ACCESS_TOKEN_SECRET: z.string().optional().default(''),
   INTERNAL_API_KEY: z.string().min(8),
   API_KEY_PEPPER: z.string().min(8),
   PASSWORD_PEPPER: z.string().min(8),

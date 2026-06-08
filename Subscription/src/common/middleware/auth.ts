@@ -6,6 +6,7 @@ import { constantTimeEquals } from '../security/crypto';
 import { apiKeyService } from '../../modules/auth/api-key.service';
 import { sessionRepository } from '../../modules/auth/session.repository';
 import { verifyBearerToken } from '../../modules/auth/jwt.service';
+import { verifyHrmBearerToken } from '../../modules/auth/hrm-jwt.service';
 import type { AuthPrincipal } from '../types/auth';
 
 export function authenticate(requiredKinds: AuthPrincipal['kind'][] = ['user', 'admin', 'service', 'organization']) {
@@ -35,7 +36,17 @@ export function authenticate(requiredKinds: AuthPrincipal['kind'][] = ['user', '
       const token = authHeader.slice(7);
       const verified = verifyBearerToken(token);
       if (!verified) {
-        throw new AppError('Unauthorized', 401, ErrorCodes.Unauthorized);
+        const hrmVerified = verifyHrmBearerToken(token);
+        if (!hrmVerified) {
+          throw new AppError('Unauthorized', 401, ErrorCodes.Unauthorized);
+        }
+
+        if (!requiredKinds.includes(hrmVerified.payload.kind)) {
+          throw new AppError('Forbidden', 403, ErrorCodes.Forbidden);
+        }
+
+        req.auth = hrmVerified.payload;
+        return next();
       }
 
       const { payload } = verified;
