@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const envInput = {
   ...process.env,
+  PORT: process.env.SUBSCRIPTION_PORT ?? process.env.PORT,
   MONGODB_URI: process.env.MONGODB_URI ?? process.env.MONGO_URI,
   HRM_ACCESS_TOKEN_SECRET: process.env.HRM_ACCESS_TOKEN_SECRET ?? process.env.ACCESS_TOKEN_SECRET ?? '',
 };
