@@ -2,9 +2,11 @@ import { AppError } from '../../common/errors/app-error';
 import { ErrorCodes } from '../../common/errors/error-codes';
 import { featureRepository } from './feature.repository';
 import { subscriptionRepository } from '../subscriptions/subscription.repository';
+import { assertHrmOrganizationExists } from '../organizations/organization-ownership.service';
 
 export const featureService = {
   check: async (organizationId: string, feature: string) => {
+    await assertHrmOrganizationExists(organizationId);
     const subscription = await subscriptionRepository.findByOrganization(organizationId);
     if (!subscription) {
       throw new AppError('Subscription not found', 404, ErrorCodes.NotFound);
