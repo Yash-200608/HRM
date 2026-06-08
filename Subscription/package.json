@@ -1,0 +1,51 @@
+{
+  "name": "subscription-billing-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone SaaS subscription and billing service for HRM integrations.",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "worker": "tsx src/jobs/worker.ts",
+    "scheduler": "tsx src/jobs/scheduler.ts",
+    "migrate:indexes": "tsx src/bootstrap/migrate-indexes.ts",
+    "local:up": "docker compose up -d mongodb redis && docker compose --profile localstack up -d localstack",
+    "local:down": "docker compose down",
+    "local:bootstrap": "npm run local:up && npm run seed:plans && npm run seed:admin",
+    "seed:plans": "tsx src/bootstrap/seed-plans.ts",
+    "seed:admin": "tsx src/bootstrap/seed-admin.ts",
+    "test": "tsx --test test/app.test.ts test/invoice-pdf.test.ts test/security.test.ts test/seed-admin.test.ts test/operator-auth-flows.test.ts test/localstack-s3.test.ts test/integration-flows.test.ts test/production-hardening.test.ts",
+    "test:localstack": "tsx --test test/localstack-s3.test.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1063.0",
+    "bullmq": "^5.58.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "helmet": "^8.0.0",
+    "ioredis": "^5.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.18.0",
+    "morgan": "^1.10.1",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.7.5",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^24.2.0",
+    "mongodb-memory-server": "^11.2.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  }
+}

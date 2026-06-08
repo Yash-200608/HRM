@@ -1,0 +1,18 @@
+export const ErrorCodes = {
+  InternalServerError: 'INTERNAL_SERVER_ERROR',
+  Unauthorized: 'UNAUTHORIZED',
+  Forbidden: 'FORBIDDEN',
+  NotFound: 'NOT_FOUND',
+  ValidationFailed: 'VALIDATION_FAILED',
+  Conflict: 'CONFLICT',
+  SubscriptionInactive: 'SUBSCRIPTION_NOT_ACTIVE',
+  SubscriptionReadOnly: 'SUBSCRIPTION_READ_ONLY',
+  EmployeeLimitExceeded: 'EMPLOYEE_LIMIT_EXCEEDED',
+  FeatureNotEnabled: 'FEATURE_NOT_ENABLED',
+  IdempotencyConflict: 'IDEMPOTENCY_CONFLICT',
+  WebhookSignatureInvalid: 'WEBHOOK_SIGNATURE_INVALID',
+  WebhookDuplicate: 'WEBHOOK_DUPLICATE',
+  PaymentFailed: 'PAYMENT_FAILED',
+  EmailNotVerified: 'EMAIL_NOT_VERIFIED',
+  InvalidToken: 'INVALID_TOKEN',
+} as const;

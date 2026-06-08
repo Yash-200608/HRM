@@ -1,0 +1,51 @@
+groups:
+  - name: subscription-billing-hardening
+    rules:
+      - alert: BillingPaymentFailureRateHigh
+        expr: |
+          100 * sum(rate(billing_payment_failure_total[5m]))
+            / clamp_min(sum(rate(billing_payment_success_total[5m])) + sum(rate(billing_payment_failure_total[5m])), 1)
+          > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Billing payment failure rate is above 5 percent
+
+      - alert: BillingRenewalFailureRateHigh
+        expr: |
+          100 * sum(rate(billing_renewal_failure_total[5m]))
+            / clamp_min(sum(rate(billing_renewal_success_total[5m])) + sum(rate(billing_renewal_failure_total[5m])), 1)
+          > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Billing renewal failure rate is above 2 percent
+
+      - alert: WebhookFailureRateHigh
+        expr: |
+          100 * sum(rate(webhook_processing_failure_total[5m]))
+            / clamp_min(sum(rate(webhook_processed_total[5m])) + sum(rate(webhook_processing_failure_total[5m])), 1)
+          > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook processing failure rate is above 2 percent
+
+      - alert: QueueBacklogHigh
+        expr: billing_queue_backlog + webhook_queue_backlog > 500
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Billing or webhook queue backlog is above threshold
+
+      - alert: UsageReconciliationDriftHigh
+        expr: increase(usage_reconciliation_drift_total[15m]) > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Usage reconciliation drift is above threshold

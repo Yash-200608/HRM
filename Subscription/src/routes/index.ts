@@ -1,0 +1,36 @@
+import { Router } from 'express';
+import { healthRouter } from './health.routes';
+import { metricsRouter } from './metrics.routes';
+import { organizationRouter } from '../modules/organizations/organization.routes';
+import { planRouter } from '../modules/plans/plan.routes';
+import { subscriptionRouter } from '../modules/subscriptions/subscription.routes';
+import { usageRouter } from '../modules/usage/usage.routes';
+import { limitRouter } from '../modules/limits/limit.routes';
+import { featureRouter } from '../modules/features/feature.routes';
+import { billingRouter } from '../modules/billing/billing.routes';
+import { webhookRouter } from '../modules/webhooks/webhook.routes';
+import { adminRouter } from '../modules/admin/admin.routes';
+import { archiveRouter } from '../modules/archive/archive.routes';
+import { eventRouter } from '../modules/events/event.routes';
+import { docsRouter } from './docs.routes';
+import { apiKeyRouter } from '../modules/auth/api-key.routes';
+import { operatorRouter } from '../modules/auth/operator.routes';
+
+export const router = Router();
+
+router.use('/metrics', metricsRouter);
+router.use('/health', healthRouter);
+router.use('/v1/organizations', organizationRouter);
+router.use('/v1/plans', planRouter);
+router.use('/v1/subscriptions', subscriptionRouter);
+router.use('/v1/usage', usageRouter);
+router.use('/v1/limits', limitRouter);
+router.use('/v1/features', featureRouter);
+router.use('/v1/billing', billingRouter);
+router.use('/v1/webhooks', webhookRouter);
+router.use('/v1/archive', archiveRouter);
+router.use('/v1/events', eventRouter);
+router.use('/v1/api-keys', apiKeyRouter);
+router.use('/v1/auth', operatorRouter);
+router.use('/v1/admin', adminRouter);
+router.use('/docs', docsRouter);

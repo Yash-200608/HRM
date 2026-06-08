@@ -1,0 +1,194 @@
+{
+  "id": null,
+  "uid": "subscription-billing-hardening",
+  "title": "Subscription Billing Hardening",
+  "tags": ["billing", "production-hardening"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Payment Outcomes",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(billing_payment_success_total[5m]))",
+          "legendFormat": "payment success",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(billing_payment_failure_total[5m]))",
+          "legendFormat": "payment failure",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(billing_saga_compensation_total[5m]))",
+          "legendFormat": "saga compensation",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Renewals",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(billing_renewal_success_total[5m]))",
+          "legendFormat": "renewal success",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(billing_renewal_failure_total[5m]))",
+          "legendFormat": "renewal failure",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Webhook Health",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(webhook_processed_total[5m]))",
+          "legendFormat": "processed",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(webhook_duplicate_total[5m]))",
+          "legendFormat": "duplicates",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(webhook_processing_failure_total[5m]))",
+          "legendFormat": "failures",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Usage and Subscription Changes",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(usage_reconciliation_drift_total[15m]))",
+          "legendFormat": "reconciliation drift",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(usage_reconciliation_corrected_total[15m]))",
+          "legendFormat": "corrections",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(subscription_upgrade_total[5m]))",
+          "legendFormat": "upgrades",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(subscription_downgrade_total[5m]))",
+          "legendFormat": "downgrades",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Queue Backlog",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "jobs"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "billing_queue_backlog",
+          "legendFormat": "billing backlog",
+          "refId": "A"
+        },
+        {
+          "expr": "webhook_queue_backlog",
+          "legendFormat": "webhook backlog",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}

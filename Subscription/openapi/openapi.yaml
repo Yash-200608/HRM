@@ -1,0 +1,975 @@
+openapi: 3.1.0
+info:
+  title: Subscription Billing Service
+  version: 0.1.0
+  description: Standalone SaaS subscription and billing service for HRM integrations.
+servers:
+  - url: /
+security:
+  - BearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Service health check
+      responses:
+        '200':
+          description: OK
+  /v1/organizations:
+    post:
+      summary: Create organization
+      security:
+        - BearerAuth: []
+        - InternalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Created
+  /v1/organizations/{id}:
+    get:
+      summary: Get organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    patch:
+      summary: Update organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: OK
+  /v1/plans:
+    get:
+      summary: List plans
+      responses:
+        '200':
+          description: OK
+  /v1/plans/{id}:
+    get:
+      summary: Get plan by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/subscriptions:
+    post:
+      summary: Create subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        '201':
+          description: Created
+  /v1/subscriptions/{id}:
+    get:
+      summary: Get subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/subscriptions/{id}/upgrade:
+    patch:
+      summary: Upgrade subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planCode:
+                  type: string
+              required: [planCode]
+      responses:
+        '200':
+          description: OK
+  /v1/subscriptions/{id}/downgrade:
+    patch:
+      summary: Downgrade subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planCode:
+                  type: string
+              required: [planCode]
+      responses:
+        '200':
+          description: OK
+  /v1/subscriptions/{id}/cancel:
+    patch:
+      summary: Cancel subscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/usage/sync:
+    post:
+      summary: Sync usage counters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsageSyncRequest'
+      responses:
+        '200':
+          description: OK
+  /v1/usage/{organizationId}:
+    get:
+      summary: Get usage by organization
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/limits/employees/check:
+    post:
+      summary: Validate employee capacity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeLimitCheckRequest'
+      responses:
+        '200':
+          description: OK
+  /v1/features/check:
+    post:
+      summary: Check feature access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeatureCheckRequest'
+      responses:
+        '200':
+          description: OK
+  /v1/billing/invoices/create:
+    post:
+      summary: Create invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+      responses:
+        '201':
+          description: Created
+  /v1/billing/invoices/finalize:
+    post:
+      summary: Finalize invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invoiceId:
+                  type: string
+              required: [invoiceId]
+      responses:
+        '200':
+          description: OK
+  /v1/billing/payments/mark-paid:
+    post:
+      summary: Mark invoice as paid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkPaidRequest'
+      responses:
+        '200':
+          description: OK
+  /v1/billing/payments/capture:
+    post:
+      summary: Capture Razorpay payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentId:
+                  type: string
+                amountInPaise:
+                  type: integer
+                currency:
+                  type: string
+              required: [paymentId, amountInPaise]
+      responses:
+        '200':
+          description: OK
+  /v1/billing/payments/refund:
+    post:
+      summary: Refund Razorpay payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentId:
+                  type: string
+                amountInPaise:
+                  type: integer
+              required: [paymentId]
+      responses:
+        '200':
+          description: OK
+  /v1/billing/credits/{organizationId}:
+    get:
+      summary: Get credit balance
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/webhooks/razorpay:
+    post:
+      summary: Receive Razorpay webhook
+      responses:
+        '200':
+          description: OK
+  /v1/archive/{organizationId}:
+    get:
+      summary: Get archive metadata
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/archive:
+    patch:
+      summary: Update archive metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveUpdateRequest'
+      responses:
+        '200':
+          description: OK
+  /v1/events/inbound:
+    post:
+      summary: Ingest inbound HRM event
+      responses:
+        '201':
+          description: Created
+  /v1/admin/metrics:
+    get:
+      summary: Get aggregate metrics
+      responses:
+        '200':
+          description: OK
+  /v1/admin/revenue:
+    get:
+      summary: Get revenue report
+      responses:
+        '200':
+          description: OK
+  /v1/admin/plans:
+    get:
+      summary: Get plan distribution
+      responses:
+        '200':
+          description: OK
+  /v1/admin/payments/failures:
+    get:
+      summary: Get payment failures
+      responses:
+        '200':
+          description: OK
+  /v1/admin/features:
+    get:
+      summary: Get feature adoption
+      responses:
+        '200':
+          description: OK
+  /v1/admin/ops/metrics:
+    get:
+      summary: Get operational metrics snapshot
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalMetricsResponse'
+  /v1/admin/outbox/{id}/replay:
+    post:
+      summary: Replay dead-lettered outbox event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboxReplayResponse'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    InternalApiKey:
+      type: apiKey
+      in: header
+      name: x-internal-api-key
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    CreateOrganizationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+      required: [name, slug]
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          type: string
+    CreateSubscriptionRequest:
+      type: object
+      properties:
+        organizationId:
+          type: string
+        planCode:
+          type: string
+      required: [organizationId, planCode]
+    UsageSyncRequest:
+      type: object
+      properties:
+        organizationId:
+          type: string
+        activeEmployees:
+          type: integer
+        archivedEmployees:
+          type: integer
+      required: [organizationId, activeEmployees]
+    FeatureCheckRequest:
+      type: object
+      properties:
+        organizationId:
+          type: string
+        feature:
+          type: string
+      required: [organizationId, feature]
+    EmployeeLimitCheckRequest:
+      type: object
+      properties:
+        organizationId:
+          type: string
+        requestedEmployees:
+          type: integer
+      required: [organizationId, requestedEmployees]
+    CreateInvoiceRequest:
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+        lineItems:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              description:
+                type: string
+              quantity:
+                type: integer
+              unitAmount:
+                type: integer
+            required: [code, description, quantity, unitAmount]
+      required: [subscriptionId, lineItems]
+    MarkPaidRequest:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+        amount:
+          type: integer
+        providerPaymentId:
+          type: string
+      required: [invoiceId, amount]
+    ArchiveUpdateRequest:
+      type: object
+      properties:
+        organizationId:
+          type: string
+        archiveStatus:
+          type: string
+        retentionDays:
+          type: integer
+    CreateOperatorRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        fullName:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+        organizationId:
+          type: string
+      required: [email, fullName, password, role]
+    SessionRecord:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        operator:
+          type: string
+        organization:
+          type: [string, 'null']
+        kind:
+          type: string
+          enum: [user, admin, service, organization]
+        roles:
+          type: array
+          items:
+            type: string
+        tokenId:
+          type: string
+        tokenVersion:
+          type: integer
+        status:
+          type: string
+          enum: [ACTIVE, REVOKED, EXPIRED]
+        deviceInfo:
+          type: object
+        ipAddress:
+          type: [string, 'null']
+        userAgent:
+          type: [string, 'null']
+        lastSeenAt:
+          type: [string, 'null']
+          format: date-time
+        revokedAt:
+          type: [string, 'null']
+          format: date-time
+        revokedReason:
+          type: [string, 'null']
+        expiresAt:
+          type: string
+          format: date-time
+      required: [sessionId, operator, kind, tokenId, tokenVersion, status, expiresAt]
+    LoginResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            operator:
+              type: object
+            principal:
+              $ref: '#/components/schemas/AuthPrincipal'
+            session:
+              $ref: '#/components/schemas/SessionRecord'
+          required: [operator, principal, session]
+        token:
+          type: string
+      required: [data, token]
+    AuthPrincipal:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [user, admin, service, organization]
+        subject:
+          type: string
+        organizationId:
+          type: [string, 'null']
+        roles:
+          type: array
+          items:
+            type: string
+        sessionId:
+          type: [string, 'null']
+        tokenId:
+          type: [string, 'null']
+        tokenVersion:
+          type: [integer, 'null']
+      required: [kind, subject]
+    SessionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionRecord'
+      required: [data]
+    SessionActionResponse:
+      type: object
+      properties:
+        data:
+          type: object
+      required: [data]
+    OperationalMetricsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            counters:
+              type: object
+            gauges:
+              type: object
+            timings:
+              type: object
+          required: [counters, gauges, timings]
+      required: [data]
+    OutboxReplayResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            eventId:
+              type: string
+            topic:
+              type: string
+            status:
+              type: string
+            attempts:
+              type: integer
+          required: [eventId, topic, status, attempts]
+      required: [data]
+  /v1/billing/invoices/{id}/pdf:
+    get:
+      summary: Download invoice PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: PDF
+  /v1/billing/invoices/razorpay-order:
+    post:
+      summary: Create Razorpay order for invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invoiceId:
+                  type: string
+              required: [invoiceId]
+      responses:
+        '200':
+          description: OK
+  /v1/api-keys/admin:
+    get:
+      summary: List admin API keys
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create admin API key
+      responses:
+        '201':
+          description: Created
+  /v1/api-keys/admin/{id}:
+    delete:
+      summary: Revoke admin API key
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/api-keys/organizations/{organizationId}:
+    get:
+      summary: List organization API keys
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create organization API key
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Created
+  /v1/api-keys/organizations/{organizationId}/{id}:
+    delete:
+      summary: Revoke organization API key
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/auth/login:
+    post:
+      summary: Login as a human operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+              required: [email, password]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+  /v1/auth/email-verification/request:
+    post:
+      summary: Request an email verification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+              required: [email]
+      responses:
+        '200':
+          description: OK
+  /v1/auth/email-verification/confirm:
+    get:
+      summary: Confirm email verification using a token link
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Confirm email verification using a token body
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required: [token]
+      responses:
+        '200':
+          description: OK
+  /v1/auth/password-reset/request:
+    post:
+      summary: Request a password reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+              required: [email]
+      responses:
+        '200':
+          description: OK
+  /v1/auth/password-reset/confirm:
+    post:
+      summary: Confirm a password reset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+              required: [token, newPassword]
+      responses:
+        '200':
+          description: OK
+  /v1/auth/me:
+    get:
+      summary: Get current operator
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AuthPrincipal'
+                required: [data]
+  /v1/auth/sessions:
+    get:
+      summary: List current operator sessions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+  /v1/auth/logout:
+    post:
+      summary: Revoke current session
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionActionResponse'
+  /v1/auth/logout-all:
+    post:
+      summary: Revoke all sessions for current operator
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionActionResponse'
+  /v1/auth/sessions/{sessionId}:
+    delete:
+      summary: Revoke a specific session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionActionResponse'
+  /v1/auth/operators:
+    post:
+      summary: Create operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOperatorRequest'
+      responses:
+        '201':
+          description: Created
+  /v1/auth/operators/admins:
+    get:
+      summary: List admin operators
+      responses:
+        '200':
+          description: OK
+  /v1/auth/operators/users:
+    get:
+      summary: List user operators
+      responses:
+        '200':
+          description: OK
+  /v1/auth/operators/{id}/suspend:
+    patch:
+      summary: Suspend operator
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/auth/operators/{id}/activate:
+    patch:
+      summary: Activate operator
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/auth/operators/{id}/resend-verification:
+    post:
+      summary: Resend operator email verification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/auth/operators/{id}/force-password-reset:
+    post:
+      summary: Force an operator password reset email
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/auth/operators/{id}/clear-verification-state:
+    post:
+      summary: Clear an operator verification state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /v1/auth/operators/{id}/revoke-password-reset:
+    post:
+      summary: Revoke a pending operator password reset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
