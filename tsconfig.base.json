@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@shared/auth/*": [
+        "packages/shared-auth/src/*"
+      ],
+      "@shared/db/*": [
+        "packages/shared-db/src/*"
+      ],
+      "@shared/types/*": [
+        "packages/shared-types/src/*"
+      ],
+      "@shared/utils/*": [
+        "packages/shared-utils/src/*"
+      ],
+      "@hrm/*": [
+        "new-hrm/back/*"
+      ],
+      "@hrm-frontend/*": [
+        "new-hrm/frontend/src/*"
+      ],
+      "@subscription/*": [
+        "Subscription/src/*"
+      ]
+    },
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
