@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+const envInput = {
+  ...process.env,
+  MONGODB_URI: process.env.MONGODB_URI ?? process.env.MONGO_URI,
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -39,4 +44,4 @@ const envSchema = z.object({
   SESSION_MAX_AGE_HOURS: z.coerce.number().int().positive().optional().default(8),
 });
 
-export const env = envSchema.parse(process.env);
+export const env = envSchema.parse(envInput);

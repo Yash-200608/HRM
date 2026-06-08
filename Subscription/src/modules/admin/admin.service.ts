@@ -1,6 +1,6 @@
 import { InvoiceModel } from '../billing/invoice.model';
 import { PaymentModel } from '../billing/payment.model';
-import { OrganizationModel } from '../organizations/organization.model';
+import { organizationRepository } from '../organizations/organization.repository';
 import { PlanModel } from '../plans/plan.model';
 import { SubscriptionModel } from '../subscriptions/subscription.model';
 import { metrics } from '../../common/observability/metrics';
@@ -57,7 +57,7 @@ export const adminService = {
       trialConversions,
       churned,
     ] = await Promise.all([
-      OrganizationModel.find().lean(),
+      organizationRepository.list(),
       SubscriptionModel.find().lean(),
       PlanModel.find().lean(),
       InvoiceModel.find({ status: 'PAID' }).lean(),
