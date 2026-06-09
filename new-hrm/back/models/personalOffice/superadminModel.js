@@ -36,6 +36,13 @@ const SuperAdminSchema = new mongoose.Schema(
 
     isActive: {type:Boolean, default: true},
     refreshToken:{type:String, default:null},
+    sessionInvalidatedAt: { type: Date, default: null },
+    tokenVersion: { type: Number, default: 0 },
+    mfaEnabled: { type: Boolean, default: false },
+    mfaSecret: { type: String, default: null, select: false },
+    mfaPendingSecret: { type: String, default: null, select: false },
+    mfaRecoveryCodeHashes: { type: [String], default: [], select: false },
+    mfaEnrolledAt: { type: Date, default: null },
   },
   { timestamps: true } // adds createdAt and updatedAt
 );

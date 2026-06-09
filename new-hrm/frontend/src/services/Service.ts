@@ -217,6 +217,12 @@ export const loginAdmin = async (email, password) => {
   return res;
 };
 
+export const logoutSession = async () => {
+  const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/logout`);
+
+  return res;
+};
+
 export const updateAdmin = async (id, obj) => {
   const res = await axios.put(
     `${import.meta.env.VITE_API_URL}/api/auth/update/${id}`,
@@ -1374,4 +1380,236 @@ export const getMessage = async (leadId: string) => {
   );
 
   return res;
+};
+
+export const getBillingOverview = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/billing/overview`);
+};
+
+export const upgradeBillingPlan = async (planCode: string) => {
+  return axios.patch(
+    `${import.meta.env.VITE_API_URL}/api/billing/upgrade`,
+    { planCode },
+    {
+      headers: {
+        "Idempotency-Key": `billing-upgrade:${planCode}:${Date.now()}`,
+      },
+    },
+  );
+};
+
+export const getBillingPaymentConfig = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/billing/payment-config`);
+};
+
+export const createInvoiceRazorpayOrder = async (invoiceId: string) => {
+  return axios.post(
+    `${import.meta.env.VITE_API_URL}/api/billing/invoices/razorpay-order`,
+    { invoiceId },
+    {
+      headers: {
+        "Idempotency-Key": `billing-rzp-order:${invoiceId}:${Date.now()}`,
+      },
+    },
+  );
+};
+
+export const captureBillingPayment = async (payload: {
+  paymentId: string;
+  amountInPaise: number;
+  currency?: string;
+  invoiceId?: string;
+}) => {
+  return axios.post(
+    `${import.meta.env.VITE_API_URL}/api/billing/payments/capture`,
+    payload,
+    {
+      headers: {
+        "Idempotency-Key": `billing-capture:${payload.paymentId}:${Date.now()}`,
+      },
+    },
+  );
+};
+
+export const getPlatformMetrics = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/platform/metrics`);
+};
+
+export const getPlatformSlaDashboard = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/platform/sla/dashboard`);
+};
+
+export const getIncidentRunbooks = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/platform/incidents/runbooks`);
+};
+
+export const getIncidentRunbook = async (id: string) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/platform/incidents/runbooks/${id}`);
+};
+
+export const requestPasswordReset = async (email: string, accountType: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/password-reset/request`, {
+    email,
+    accountType,
+  });
+};
+
+export const confirmPasswordReset = async (token: string, newPassword: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/password-reset/confirm`, {
+    token,
+    newPassword,
+  });
+};
+
+export const verifyMfaLogin = async (mfaChallengeToken: string, code: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/verify-login`, {
+    mfaChallengeToken,
+    code,
+  });
+};
+
+export const setupMfa = async () => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/setup`);
+};
+
+export const enableMfa = async (code: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/enable`, { code });
+};
+
+export const disableMfa = async (code: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/disable`, { code });
+};
+
+export const regenerateMfaRecoveryCodes = async (code: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/recovery-codes/regenerate`, { code });
+};
+
+export const getScimConfig = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/scim/config`);
+};
+
+export const rotateScimToken = async () => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/scim/token/rotate`);
+};
+
+export const getOAuthIdentities = async (params?: Record<string, string | number>) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/auth/oauth/identities`, { params });
+};
+
+export const getOAuthIdentityAudit = async (identityId: string) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/auth/oauth/identities/${identityId}/audit`);
+};
+
+export const revokeOAuthIdentity = async (identityId: string) => {
+  return axios.patch(`${import.meta.env.VITE_API_URL}/api/auth/oauth/identities/${identityId}/revoke`);
+};
+
+export const disableOAuthIdentity = async (identityId: string) => {
+  return axios.patch(`${import.meta.env.VITE_API_URL}/api/auth/oauth/identities/${identityId}/disable`);
+};
+
+export const getOAuthSecurityEvents = async (params?: Record<string, string | number>) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/auth/oauth/security-events`, { params });
+};
+
+export const forceOAuthLogoutAll = async () => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/oauth/incident/force-logout-all`);
+};
+
+export const forceOAuthReauth = async (accountType: string, userId: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/oauth/incident/force-reauth`, {
+    accountType,
+    userId,
+  });
+};
+
+export const downloadComplianceExport = async (companyId?: string) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/compliance/export`, {
+    params: companyId ? { companyId } : undefined,
+    responseType: "blob",
+  });
+};
+
+export const getPerformanceCycles = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/performance/cycles`);
+};
+
+export const createPerformanceCycle = async (payload: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/performance/cycles`, payload);
+};
+
+export const getPerformanceReviews = async (cycleId?: string) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/performance/reviews`, {
+    params: cycleId ? { cycleId } : undefined,
+  });
+};
+
+export const getMyPerformanceReviews = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/performance/reviews/me`);
+};
+
+export const getAssets = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/assets`);
+};
+
+export const createAsset = async (payload: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/assets`, payload);
+};
+
+export const checkoutAsset = async (assetId: string, payload: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/assets/${assetId}/checkout`, payload);
+};
+
+export const returnAsset = async (assetId: string, payload?: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/assets/${assetId}/return`, payload || {});
+};
+
+export const getAssetHistory = async (assetId: string) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/assets/${assetId}/history`);
+};
+
+export const getLearningCourses = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/learning/courses`);
+};
+
+export const createLearningCourse = async (payload: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/learning/courses`, payload);
+};
+
+export const getLearningEnrollments = async () => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/learning/enrollments`);
+};
+
+export const enrollLearningEmployee = async (payload: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/learning/enrollments`, payload);
+};
+
+export const upsertLearningQuiz = async (courseId: string, payload: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/learning/courses/${courseId}/quiz`, payload);
+};
+
+export const getLearningQuiz = async (courseId: string) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/learning/courses/${courseId}/quiz`);
+};
+
+export const submitLearningQuiz = async (enrollmentId: string, answers: number[]) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/learning/enrollments/${enrollmentId}/quiz-submit`, {
+    answers,
+  });
+};
+
+export const getLearningCertificate = async (enrollmentId: string) => {
+  return axios.get(`${import.meta.env.VITE_API_URL}/api/learning/enrollments/${enrollmentId}/certificate`);
+};
+
+export const bulkAssignPerformanceReviews = async (payload: object) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/performance/reviews/bulk-assign`, payload);
+};
+
+export const submitPerformanceReview = async (reviewId: string, payload: object) => {
+  return axios.patch(`${import.meta.env.VITE_API_URL}/api/performance/reviews/${reviewId}`, payload);
+};
+
+export const acknowledgePerformanceReview = async (reviewId: string) => {
+  return axios.patch(`${import.meta.env.VITE_API_URL}/api/performance/reviews/${reviewId}/acknowledge`);
 };

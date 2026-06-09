@@ -12,6 +12,9 @@ import { Helmet } from 'react-helmet-async';
 import { useAppDispatch } from '@/redux-toolkit/hooks/hook';
 import {loginSuperAdmin} from "@/services/Service";
 import {getLoginUser} from "@/redux-toolkit/slice/allPage/loginUserSlice";
+import OAuthButtons from "@/components/auth/OAuthButtons";
+import MfaLoginChallenge from "@/components/auth/MfaLoginChallenge";
+import { Link } from "react-router-dom";
 
  
 const SuperAdminLogin: React.FC = () => {
@@ -23,6 +26,10 @@ const SuperAdminLogin: React.FC = () => {
   const { toast } = useToast();
   const dispatch = useAppDispatch();
   const [isLoading, setIsLoading] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState<{
+    mfaChallengeToken: string;
+    email?: string;
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +43,14 @@ const SuperAdminLogin: React.FC = () => {
     }
        setIsLoading(true);
     try {
-      const res = await loginSuperAdmin(email, password); // Admin role hardcoded
+      const res = await loginSuperAdmin(email, password);
+      if (res.status === 200 && res?.data?.mfaRequired) {
+        setMfaChallenge({
+          mfaChallengeToken: res.data.mfaChallengeToken,
+          email: res.data.email,
+        });
+        return;
+      }
       if (res.status === 200) {
               toast({
                 title: "Login Successfully.",
@@ -44,8 +58,8 @@ const SuperAdminLogin: React.FC = () => {
               });
               localStorage.setItem('accessToken', res?.data?.accessToken);
               localStorage.setItem('user', JSON.stringify(res?.data?.user));
-              // setUser(res?.data?.user);
               dispatch(getLoginUser(res?.data?.user))
+              navigate("/dashboard");
             }
             else {
               toast({
@@ -203,6 +217,20 @@ const SuperAdminLogin: React.FC = () => {
 
             </div>
 
+            {mfaChallenge ? (
+              <MfaLoginChallenge
+                mfaChallengeToken={mfaChallenge.mfaChallengeToken}
+                email={mfaChallenge.email}
+                onCancel={() => setMfaChallenge(null)}
+                onSuccess={({ accessToken, user }) => {
+                  toast({ title: "Login successful" });
+                  localStorage.setItem("accessToken", accessToken);
+                  localStorage.setItem("user", JSON.stringify(user));
+                  dispatch(getLoginUser(user));
+                  navigate("/dashboard");
+                }}
+              />
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
 
               {/* EMAIL */}
@@ -288,7 +316,16 @@ const SuperAdminLogin: React.FC = () => {
 
               </Button>
 
+              <div className="text-right">
+                <Link to="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
+
+              <OAuthButtons disabled={isLoading} role="super_admin" />
+
             </form>
+            )}
 
             {/* FOOTER */}
             <div className="mt-8 border-t border-slate-100 pt-6">

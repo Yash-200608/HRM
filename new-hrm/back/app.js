@@ -25,7 +25,17 @@ const taskRoutes = require("./routes/taskRoutes.js");
 const accessroleRoutes = require("./routes/roleRoutes");
 const resignationRoutes = require("./routes/resignationRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
+const authMiddleware = require("./middleware/authMiddleware.js");
+const { correlationIdMiddleware } = require("./middleware/correlationIdMiddleware.js");
 const { mountSubscriptionProxyRoutes } = require("./routes/subscriptionProxyRoutes.js");
+const { router: platformRoutes, handleOutboxInbound } = require("./routes/platformRoutes.js");
+const billingOverviewRoutes = require("./routes/billingOverviewRoutes.js");
+const complianceRoutes = require("./routes/complianceRoutes.js");
+const performanceRoutes = require("./routes/performanceRoutes.js");
+const assetRoutes = require("./routes/assetRoutes.js");
+const learningRoutes = require("./routes/learningRoutes.js");
+const scimRoutes = require("./routes/scimRoutes.js");
+const scimAdminRoutes = require("./routes/scimAdminRoutes.js");
 
 
 // job-portal
@@ -59,6 +69,12 @@ const PORT = process.env.HRM_PORT || process.env.PORT || 5000;
 // ------------------------
 // Middlewares
 // ------------------------
+app.use(correlationIdMiddleware);
+app.post(
+  "/api/platform/outbox/inbound",
+  express.raw({ type: "application/json" }),
+  handleOutboxInbound
+);
 app.use(express.json());
 app.use(cookieParser());
 app.use(
@@ -68,7 +84,9 @@ app.use(
       "http://localhost:8081",
       "http://localhost:8082",
       "https://salmon-tapir-632940.hostingersite.com",
-    ],
+      process.env.HRM_FRONTEND_URL,
+      process.env.FRONTEND_URL,
+    ].filter(Boolean),
     credentials: true,
   }),
 );
@@ -120,8 +138,18 @@ app.use("/api/message", messageRoutes);
 // super-admin
 app.use("/api/superAdmin/auth", superAdminRoutes);
 
-// subscription/billing API gateway
-mountSubscriptionProxyRoutes(app);
+// Phase 2 platform lifecycle + billing overview
+app.use("/api/platform", platformRoutes);
+app.use("/api/billing", billingOverviewRoutes);
+app.use("/api/compliance", complianceRoutes);
+app.use("/api/performance", performanceRoutes);
+app.use("/api/assets", assetRoutes);
+app.use("/api/learning", learningRoutes);
+app.use("/scim/v2", scimRoutes);
+app.use("/api/scim", scimAdminRoutes);
+
+// subscription/billing API gateway (authenticated; client internal keys stripped)
+mountSubscriptionProxyRoutes(app, { authMiddleware });
 
 app.use(express.static(path.join(__dirname, "build")));
 

@@ -1,6 +1,11 @@
 
 const express = require("express");
 const router = express.Router();
+const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
+const { requireWritableTenant } = require("../middleware/requireWritableTenant.js");
+
+const departmentAccess = enforceModuleAccess("departments");
+const departmentMutationGuard = requireWritableTenant();
 const {
   addDepartment,
   getDepartments,
@@ -46,7 +51,7 @@ const {
  *       400:
  *         description: Bad request
  */
-router.post("/add", addDepartment);
+router.post("/add", departmentMutationGuard, departmentAccess, addDepartment);
 
 /**
  * @swagger
@@ -84,7 +89,7 @@ router.post("/add", addDepartment);
  *                     format: date-time
  *                     example: 2026-01-12T12:00:00Z
  */
-router.get("/get/:companyId", getDepartments);
+router.get("/get/:companyId", departmentAccess, getDepartments);
 
 /**
  * @swagger
@@ -129,7 +134,7 @@ router.get("/get/:companyId", getDepartments);
  *       404:
  *         description: Department not found
  */
-router.get("/getbyid/:id", getDepartmentById);
+router.get("/getbyid/:id", departmentAccess, getDepartmentById);
 
 /**
  * @swagger
@@ -167,7 +172,7 @@ router.get("/getbyid/:id", getDepartmentById);
  *       404:
  *         description: Department not found
  */
-router.put("/updateDepartment/:id", updateDepartment);
+router.put("/updateDepartment/:id", departmentMutationGuard, departmentAccess, updateDepartment);
 
 /**
  * @swagger
@@ -190,7 +195,7 @@ router.put("/updateDepartment/:id", updateDepartment);
  *       404:
  *         description: Department not found
  */
-router.delete("/deleteDepartment/:id", deleteDepartment);
-router.patch("/update/employee", updateEmployeeByDepartment);
+router.delete("/deleteDepartment/:id", departmentMutationGuard, departmentAccess, deleteDepartment);
+router.patch("/update/employee", departmentMutationGuard, departmentAccess, updateEmployeeByDepartment);
 
 module.exports = router;

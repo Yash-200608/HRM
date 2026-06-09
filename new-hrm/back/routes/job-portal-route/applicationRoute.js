@@ -1,18 +1,22 @@
 const router = require("express").Router();
+const { createPortalGuards } = require("../../middleware/portalGuards.js");
 
-const { createApplication,
+const {
+  createApplication,
   getApplications,
   getApplicationById,
   updateApplication,
   updateApplicationStatus,
-  deleteApplication,} = require("../../controllers/job-portal/applicationController");
+  deleteApplication,
+} = require("../../controllers/job-portal/applicationController");
 
+const { access, mutation } = createPortalGuards("jobportal");
 
-  router.post("/add",createApplication)
-  router.get("/get",getApplications)
-  router.get("/getbyid",getApplicationById)
-  router.put("/update/:id",updateApplication)
-  router.delete("/delete",deleteApplication)
-  router.patch("/status/update",updateApplicationStatus)
+router.post("/add", mutation, access, createApplication);
+router.get("/get", access, getApplications);
+router.get("/getbyid", access, getApplicationById);
+router.put("/update/:id", mutation, access, updateApplication);
+router.delete("/delete", mutation, access, deleteApplication);
+router.patch("/status/update", mutation, access, updateApplicationStatus);
 
-  module.exports = router;
+module.exports = router;

@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { callSubscription } = require("./billingClient.js");
 
 const HRM_EMPLOYEE_EVENT_TYPES = new Set([
   "EmployeeCreated",
@@ -85,6 +86,65 @@ function buildEmployeeLifecycleEventId(eventType, entityId, eventVersion) {
   return `hrm.employee.${entityId}.${eventType}.${eventVersion}`;
 }
 
+const HTTP_EMIT_MAX_ATTEMPTS = 3;
+const HTTP_EMIT_RETRY_BASE_MS = 250;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function emitEmployeeLifecycleEventHttp(eventRecord) {
+  if (!eventRecord) {
+    return { delivered: false, via: "skipped" };
+  }
+
+  if (process.env.EMPLOYEE_EVENT_HTTP_EMIT_ENABLED === "false") {
+    return { delivered: false, via: "disabled" };
+  }
+
+  const inboundPayload = {
+    eventId: eventRecord.eventId,
+    source: eventRecord.source || "hrm",
+    topic: eventRecord.topic,
+    organizationId: eventRecord.organizationId,
+    payload: eventRecord.payload,
+  };
+
+  for (let attempt = 1; attempt <= HTTP_EMIT_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await callSubscription("/v1/events/inbound", {
+        method: "POST",
+        body: inboundPayload,
+        organizationId: eventRecord.organizationId,
+        operation: `event-inbound:${eventRecord.eventId}`,
+        idempotent: true,
+      });
+
+      if (response.ok) {
+        return {
+          delivered: true,
+          via: "http",
+          deduped: Boolean(response.data?.deduped),
+          attempt,
+        };
+      }
+    } catch (error) {
+      if (attempt === HTTP_EMIT_MAX_ATTEMPTS) {
+        return {
+          delivered: false,
+          via: "db-fallback",
+          attempt,
+          error: error.message,
+        };
+      }
+    }
+
+    await sleep(HTTP_EMIT_RETRY_BASE_MS * attempt);
+  }
+
+  return { delivered: false, via: "db-fallback" };
+}
+
 async function publishEmployeeLifecycleEvent({
   eventType,
   employee,
@@ -131,22 +191,35 @@ async function publishEmployeeLifecycleEvent({
     status: "RECEIVED",
   };
 
+  let persistedRecord;
+
   try {
-    return await EventInbox.findOneAndUpdate(
+    persistedRecord = await EventInbox.findOneAndUpdate(
       { organizationId: normalizedOrganizationId, eventId },
       { $setOnInsert: record },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     ).lean();
   } catch (error) {
     if (error && error.code === 11000) {
-      return EventInbox.findOne({ organizationId: normalizedOrganizationId, eventId }).lean();
+      persistedRecord = await EventInbox.findOne({
+        organizationId: normalizedOrganizationId,
+        eventId,
+      }).lean();
+    } else {
+      throw error;
     }
-
-    throw error;
   }
+
+  const httpDelivery = await emitEmployeeLifecycleEventHttp(persistedRecord);
+
+  return {
+    ...persistedRecord,
+    delivery: httpDelivery,
+  };
 }
 
 module.exports = {
+  emitEmployeeLifecycleEventHttp,
   mapEmployeeStatusTransition,
   publishEmployeeLifecycleEvent,
 };

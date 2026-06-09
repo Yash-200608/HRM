@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, Users, Building2, User, IndianRupee, FolderKanban, Clock, CalendarDays, Receipt, Wallet, Bell, BarChart3, Settings, LogOut, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, User, IndianRupee, FolderKanban, Clock, CalendarDays, Receipt, Wallet, Bell, BarChart3, Settings, LogOut, Briefcase, CreditCard, TrendingUp, Shield, Target, Package, GraduationCap, Activity } from 'lucide-react';
 import { FileText } from "lucide-react";
 
 //  strong password check k liye hai y 
@@ -467,10 +467,66 @@ export const navItems: NavItem[] = [
   },
 
   {
+    icon: Target,
+    label: 'Performance',
+    path: '/performance',
+    module: 'performance'
+  },
+
+  {
+    icon: Target,
+    label: 'My Performance',
+    path: '/my-performance',
+    module: 'performance'
+  },
+
+  {
+    icon: Package,
+    label: 'Assets',
+    path: '/assets',
+    module: 'assets'
+  },
+
+  {
+    icon: GraduationCap,
+    label: 'Learning',
+    path: '/learning',
+    module: 'learning'
+  },
+
+  {
+    icon: CreditCard,
+    label: 'Billing',
+    path: '/billing',
+    module: 'billing'
+  },
+
+  {
+    icon: TrendingUp,
+    label: 'Platform Revenue',
+    path: '/platform-revenue',
+    module: 'platform_revenue'
+  },
+
+  {
+    icon: Activity,
+    label: 'Platform Ops',
+    path: '/platform-ops',
+    module: 'platform_ops'
+  },
+
+  {
     icon: User,
     label: 'Roles',
     path: '/assignroles',
     module: 'roles'
+  },
+
+  {
+    icon: Shield,
+    label: 'Security',
+    path: '/security',
+    module: 'security'
   },
 
   {

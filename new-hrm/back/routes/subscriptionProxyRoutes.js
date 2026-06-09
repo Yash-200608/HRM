@@ -16,12 +16,19 @@ const HOP_BY_HOP_HEADERS = new Set([
   "upgrade",
 ]);
 
+const BLOCKED_CLIENT_HEADERS = new Set(["x-internal-api-key"]);
+
 const billingProxyMounts = [
   { mountPath: "/api/subscriptions", upstreamPrefix: "/v1/subscriptions" },
   { mountPath: "/api/billing", upstreamPrefix: "/v1/billing" },
   { mountPath: "/api/invoices", upstreamPrefix: "/v1/billing/invoices" },
   { mountPath: "/api/payments", upstreamPrefix: "/v1/billing/payments" },
   { mountPath: "/api/credits", upstreamPrefix: "/v1/billing/credits" },
+  { mountPath: "/api/plans", upstreamPrefix: "/v1/plans" },
+  { mountPath: "/api/usage", upstreamPrefix: "/v1/usage" },
+  { mountPath: "/api/limits", upstreamPrefix: "/v1/limits" },
+  { mountPath: "/api/features", upstreamPrefix: "/v1/features" },
+  { mountPath: "/api/events", upstreamPrefix: "/v1/events" },
 ];
 
 function resolveBillingApiBaseUrl(baseUrl) {
@@ -54,12 +61,17 @@ function buildUpstreamUrl(baseUrl, upstreamPrefix, requestUrl) {
   return `${baseUrl}${upstreamPrefix}${suffix}`;
 }
 
-function copyRequestHeaders(req) {
+function copyRequestHeaders(req, options = {}) {
   const headers = {};
+  const stripBlockedHeaders = options.stripBlockedHeaders !== false;
 
   for (const [key, value] of Object.entries(req.headers)) {
     const headerName = key.toLowerCase();
     if (HOP_BY_HOP_HEADERS.has(headerName) || value == null) {
+      continue;
+    }
+
+    if (stripBlockedHeaders && BLOCKED_CLIENT_HEADERS.has(headerName)) {
       continue;
     }
 
@@ -113,6 +125,9 @@ function createSubscriptionProxyRouter(options) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const headers = copyRequestHeaders(req);
+    if (req.correlationId) {
+      headers["x-correlation-id"] = req.correlationId;
+    }
     const body = serializeRequestBody(req, headers);
     const upstreamUrl = buildUpstreamUrl(baseUrl, upstreamPrefix, req.url);
 
@@ -148,19 +163,32 @@ function createSubscriptionProxyRouter(options) {
   return router;
 }
 
-function mountSubscriptionProxyRoutes(app) {
+function mountSubscriptionProxyRoutes(app, options = {}) {
+  const { authMiddleware } = options;
+
   for (const mount of billingProxyMounts) {
-    app.use(
-      mount.mountPath,
+    const middlewares = [];
+
+    if (authMiddleware) {
+      middlewares.push(authMiddleware);
+    }
+
+    middlewares.push(
       createSubscriptionProxyRouter({
         upstreamPrefix: mount.upstreamPrefix,
+        baseUrl: options.baseUrl,
+        timeoutMs: options.timeoutMs,
       })
     );
+
+    app.use(mount.mountPath, ...middlewares);
   }
 }
 
 module.exports = {
+  BLOCKED_CLIENT_HEADERS,
   billingProxyMounts,
+  copyRequestHeaders,
   createSubscriptionProxyRouter,
   mountSubscriptionProxyRoutes,
 };

@@ -1,19 +1,24 @@
 const router = require("express").Router();
+const { createPortalGuards } = require("../../middleware/portalGuards.js");
 
-const {createJob,
+const {
+  createJob,
   getAllJobs,
   getSingleJob,
   updateJob,
   deleteJob,
   publishJob,
-  toggleActiveStatus} = require("../../controllers/job-portal/jobController");
+  toggleActiveStatus,
+} = require("../../controllers/job-portal/jobController");
 
-  router.post("/add", createJob);
-  router.get("/get", getAllJobs);
-  router.get("/getbyid", getSingleJob);
-  router.delete("/delete", deleteJob);
-  router.patch("/publish/:id", publishJob);
-  router.patch("/status/:id", toggleActiveStatus);
-  router.put("/update", updateJob);
+const { access, mutation } = createPortalGuards("jobportal");
 
-  module.exports = router;
+router.post("/add", mutation, access, createJob);
+router.get("/get", access, getAllJobs);
+router.get("/getbyid", access, getSingleJob);
+router.delete("/delete", mutation, access, deleteJob);
+router.patch("/publish/:id", mutation, access, publishJob);
+router.patch("/status/:id", mutation, access, toggleActiveStatus);
+router.put("/update", mutation, access, updateJob);
+
+module.exports = router;

@@ -29,6 +29,8 @@ export interface User {
   taskRole?: string;
   taskRoleStatus?: string;
   taskRoleDescription?: string;
+  entitlements?: string[];
+  subscriptionPlan?: string | null;
 }
 
 export interface Company {

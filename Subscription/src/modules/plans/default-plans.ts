@@ -91,7 +91,7 @@ export const defaultPlans: PlanDefinition[] = [
     name: 'Enterprise',
     version: 1,
     hidden: false,
-    purchasable: true,
+    purchasable: false,
     systemManaged: false,
     employeeLimit: null,
     billingInterval: 'month',

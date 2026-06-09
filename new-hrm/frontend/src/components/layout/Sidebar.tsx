@@ -129,22 +129,33 @@ const filteredNavItems = navItems.filter((item) => {
 
   // SUPER ADMIN
   if (user?.role === "super_admin") {
-    return ["dashboard", "companies", "admins", "setting"].includes(item.module);
+    return ["dashboard", "companies", "admins", "platform_revenue", "platform_ops", "security", "setting"].includes(item.module);
   }
 
   // ADMIN
   if (user?.role === "admin") {
 
     // hide super admin modules
-    if (["companies", "admins"].includes(item.module)) {
+    if (["companies", "admins", "platform_revenue", "platform_ops"].includes(item.module)) {
       return false;
     }
 
-    return true;
+    if (item.path === "/my-performance") {
+      return false;
+    }
+
+    if (["billing", "security", "dashboard", "setting", "roles"].includes(item.module)) {
+      return true;
+    }
+
+    return hasPermission(user, item.module, "view");
   }
 
   // EMPLOYEE / HR / MANAGER
   if (user?.role === "employee") {
+    if (item.path === "/performance") {
+      return false;
+    }
     return hasPermission(user, item.module, "view");
   }
 
@@ -157,33 +168,17 @@ const filteredNavItems = navItems.filter((item) => {
 
   const filteredTaskSubMenu = taskSubMenu.filter((sub) => {
 
-  // ADMIN gets all
-  if (user?.role === "admin") {
-    return true;
-  }
-
-  // EMPLOYEE / HR / MANAGER
   return hasPermission(user, sub.module, "view");
   
 });
 
 
 const filteredJobSubMenu = JobSubMenu.filter((sub) => {
-
-  if (user?.role === "admin") {
-    return true;
-  }
-
   return hasPermission(user, sub.module, "view");
 });
 
 
 const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
-
-  if (user?.role === "admin") {
-    return true;
-  }
-
   return hasPermission(user, sub.module, "view");
 });
 

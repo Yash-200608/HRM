@@ -1,5 +1,6 @@
 const authMiddleware = require("../middleware/authMiddleware");
 const checkPermission = require("../middleware/checkPermission");
+const { requireWritableTenant } = require("../middleware/requireWritableTenant.js");
 const express = require("express");
 const router = express.Router();
 const upload = require("../middleware/upload.js");
@@ -113,6 +114,7 @@ const {
 router.post(
   "/add",
  authMiddleware,
+ requireWritableTenant(),
  checkPermission("employees","create"),
   upload.fields([
     { name: "profileImage", maxCount: 1 },
