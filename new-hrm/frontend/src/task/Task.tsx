@@ -25,7 +25,7 @@ import { getEmployeeList } from "@/redux-toolkit/slice/allPage/userSlice";
 import { getTasks } from "@/redux-toolkit/slice/task/taskSlice";
 import { socket } from "@/socket/socket";
 import { EmployeeFormDialog } from "@/Forms/EmployeeFormDialog"
-import { hasPermission } from "@/services/permission";
+import { hasPermission } from "@/lib/permissions";
 
 interface TaskItem {
   id: number;

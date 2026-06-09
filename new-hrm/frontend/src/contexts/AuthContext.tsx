@@ -2,7 +2,8 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, UserRole } from '@/types';
 import { useToast } from "@/hooks/use-toast";
-import { loginEmployee } from "@/services/Service";
+import { getBillingOverview, loginEmployee, logoutSession } from "@/services/Service";
+import { applyEntitlementsToStoredUser } from "@/lib/entitlements";
 import { useAppDispatch, useAppSelector } from '@/redux-toolkit/hooks/hook';
 import { getCompany, getRecentActivities } from '@/redux-toolkit/slice/allPage/companySlice';
 import { getSetting, clearSetting, getCompanyDetail } from '@/redux-toolkit/slice/allPage/settingSlice';
@@ -32,6 +33,7 @@ import { getLoginUser } from "@/redux-toolkit/slice/allPage/loginUserSlice";
 import { socket } from "@/socket/socket";
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from "jwt-decode";
+import { readEntitlementsFromAccessToken } from "@/lib/entitlements";
 
 interface AuthContextType {
   user: User | null;
@@ -55,13 +57,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const navigate = useNavigate();
 
   useEffect(() => {
+    const mergeEntitlements = (storedUser: User | null) => {
+      if (!storedUser) {
+        return null;
+      }
+
+      const tokenClaims = readEntitlementsFromAccessToken();
+      if (!tokenClaims.entitlements.length && !tokenClaims.subscriptionPlan) {
+        return storedUser;
+      }
+
+      return {
+        ...storedUser,
+        entitlements: storedUser.entitlements?.length
+          ? storedUser.entitlements
+          : tokenClaims.entitlements,
+        subscriptionPlan: storedUser.subscriptionPlan || tokenClaims.subscriptionPlan || "free",
+      };
+    };
+
     if (loginUserData) {
-      setUser(loginUserData)
-    }
-    else {
-     const storedUser = localStorage.getItem("user");
-const user = storedUser ? JSON.parse(storedUser) : null;
-setUser(user);
+      const enriched = mergeEntitlements(loginUserData);
+      setUser(enriched);
+      if (enriched && enriched !== loginUserData) {
+        localStorage.setItem("user", JSON.stringify(enriched));
+      }
+    } else {
+      const storedUser = localStorage.getItem("user");
+      const parsed = storedUser ? JSON.parse(storedUser) : null;
+      const enriched = mergeEntitlements(parsed);
+      setUser(enriched);
+      if (enriched && enriched !== parsed) {
+        localStorage.setItem("user", JSON.stringify(enriched));
+      }
     }
   }, [loginUserData])
 
@@ -284,8 +312,51 @@ useEffect(() => {
 
 }, []);
 
+  useEffect(() => {
+    if (!user || user.role === "super_admin") {
+      return;
+    }
+
+    const needsRefresh = !user.subscriptionPlan;
+
+    if (!needsRefresh) {
+      return;
+    }
+
+    let cancelled = false;
+
+    getBillingOverview()
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        const data = response?.data?.data ?? response?.data;
+        if (!Array.isArray(data?.entitlements)) {
+          return;
+        }
+
+        const updated = applyEntitlementsToStoredUser(
+          data.entitlements,
+          data.subscriptionPlan
+        );
+
+        if (updated) {
+          setUser(updated);
+          dispatch(getLoginUser(updated));
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?._id, user?.role, dispatch]);
+
 
   const logout = () => {
+    void logoutSession().catch(() => undefined);
+
     if (user?.role === "super_admin") {
       navigate("/superAdmin/login");
     }

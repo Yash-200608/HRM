@@ -1,10 +1,11 @@
 const router = require("express").Router();
-
-const {addMessage, getMessages} = require("../../controllers/lead-portal/messageController");
+const { createPortalGuards } = require("../../middleware/portalGuards.js");
+const { addMessage, getMessages } = require("../../controllers/lead-portal/messageController");
 const upload = require("../../middleware/upload");
 
+const { access, mutation } = createPortalGuards("leadportal");
 
-router.post("/add",upload.fields([{name:"media", maxCount:1}]), addMessage);
-router.get("/get", getMessages);
+router.post("/add", mutation, access, upload.fields([{ name: "media", maxCount: 1 }]), addMessage);
+router.get("/get", access, getMessages);
 
 module.exports = router;

@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+const envInput = {
+  ...process.env,
+  PORT: process.env.SUBSCRIPTION_PORT ?? process.env.PORT,
+  MONGODB_URI: process.env.MONGODB_URI ?? process.env.MONGO_URI,
+  HRM_ACCESS_TOKEN_SECRET: process.env.HRM_ACCESS_TOKEN_SECRET ?? process.env.ACCESS_TOKEN_SECRET ?? '',
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -7,6 +14,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
   ADMIN_JWT_SECRET: z.string().min(16),
+  HRM_ACCESS_TOKEN_SECRET: z.string().optional().default(''),
   INTERNAL_API_KEY: z.string().min(8),
   API_KEY_PEPPER: z.string().min(8),
   PASSWORD_PEPPER: z.string().min(8),
@@ -39,4 +47,4 @@ const envSchema = z.object({
   SESSION_MAX_AGE_HOURS: z.coerce.number().int().positive().optional().default(8),
 });
 
-export const env = envSchema.parse(process.env);
+export const env = envSchema.parse(envInput);

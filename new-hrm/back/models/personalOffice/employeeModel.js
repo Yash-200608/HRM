@@ -42,6 +42,13 @@ const employeeSchema = new mongoose.Schema(
   default: "",
 },
 
+    scimExternalId: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+
 address: {
   type: String,
   trim: true,
@@ -180,7 +187,9 @@ bloodGroup: {
   ref: "AccessRole",
   default: null
 },
-    refreshToken: String
+    refreshToken: String,
+    sessionInvalidatedAt: { type: Date, default: null },
+    tokenVersion: { type: Number, default: 0 },
   },
   {
     timestamps: true, // createdAt, updatedAt

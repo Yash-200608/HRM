@@ -1,14 +1,10 @@
 import mongoose from 'mongoose';
+import { createMongooseDb } from '../../../../packages/shared-db/src/mongoose-session.mjs';
+
+const db = createMongooseDb(mongoose);
 
 export async function withTransaction<T>(fn: (session: mongoose.ClientSession) => Promise<T>) {
-  const session = await mongoose.startSession();
-  try {
-    let result!: T;
-    await session.withTransaction(async () => {
-      result = await fn(session);
-    });
-    return result;
-  } finally {
-    await session.endSession();
-  }
+  return db.withTransaction(fn);
 }
+
+export const startSession = db.startSession;

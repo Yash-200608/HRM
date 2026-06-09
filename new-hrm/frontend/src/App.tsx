@@ -8,6 +8,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import Login from "@/pages/Login";
 import AdminLogin from "@/pages/AdminLogin";
 import SuperAdminLogin from "@/pages/SuperAdminLogin";
+import OAuthCallback from "@/pages/OAuthCallback";
 import Dashboard from "@/pages/Dashboard";
 import Users from "@/pages/Users";
 import Companies from "@/pages/Companies";
@@ -53,6 +54,16 @@ import ResignationManagement from "./pages/ResignationManagement";
 import Holidays from "@/pages/Holidays";
 import HolidayManagement from "@/pages/HolidayManagement";
 import MonthlyAttendanceReport from "./pages/MonthlyAttendanceReport";
+import Billing from "./pages/Billing";
+import PlatformRevenue from "./pages/PlatformRevenue";
+import PlatformOps from "./pages/PlatformOps";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import SecuritySettings from "./pages/SecuritySettings";
+import Performance from "./pages/Performance";
+import MyPerformance from "./pages/MyPerformance";
+import Assets from "./pages/Assets";
+import Learning from "./pages/Learning";
 
 
 
@@ -95,6 +106,9 @@ const AppRoutes = () => {
       <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/admin/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <AdminLogin />} />
       <Route path="/superAdmin/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <SuperAdminLogin />} />
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
 
      <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
@@ -224,6 +238,86 @@ element={
 />
 
 <Route path="/notifications" element={<Notifications />} />
+
+<Route
+  path="/billing"
+  element={
+    user?.role === "admin" ? (
+      <Billing />
+    ) : (
+      <Navigate to="/dashboard" replace />
+    )
+  }
+/>
+
+<Route
+  path="/platform-revenue"
+  element={
+    user?.role === "super_admin" ? (
+      <PlatformRevenue />
+    ) : (
+      <Navigate to="/dashboard" replace />
+    )
+  }
+/>
+
+<Route
+  path="/platform-ops"
+  element={
+    user?.role === "super_admin" ? (
+      <PlatformOps />
+    ) : (
+      <Navigate to="/dashboard" replace />
+    )
+  }
+/>
+
+<Route
+  path="/security"
+  element={
+    user?.role === "admin" || user?.role === "super_admin" ? (
+      <SecuritySettings />
+    ) : (
+      <Navigate to="/dashboard" replace />
+    )
+  }
+/>
+
+<Route
+  path="/performance"
+  element={
+    <PermissionRoute module="performance" action="view">
+      <Performance />
+    </PermissionRoute>
+  }
+/>
+
+<Route
+  path="/my-performance"
+  element={
+    <PermissionRoute module="performance" action="view">
+      <MyPerformance />
+    </PermissionRoute>
+  }
+/>
+
+<Route
+  path="/assets"
+  element={
+    <PermissionRoute module="assets" action="view">
+      <Assets />
+    </PermissionRoute>
+  }
+/>
+
+<Route
+  path="/learning"
+  element={
+    <PermissionRoute module="learning" action="view">
+      <Learning />
+    </PermissionRoute>
+  }
+/>
 
 {/* TASKS */}
 <Route

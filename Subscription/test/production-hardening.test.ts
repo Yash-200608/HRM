@@ -962,6 +962,52 @@ test('inbox processor is duplicate-safe for the same event', async () => {
   assert.equal(inboxRecords[0]?.status, 'PROCESSED');
 });
 
+test('employee lifecycle inbox events update usage projection and reject stale replay', async () => {
+  const organization = await organizationService.create({
+    name: `Lifecycle ${makeId('org')}`,
+    slug: `lifecycle-${makeId('slug')}`.toLowerCase(),
+  });
+  const organizationId = String(organization._id);
+  const entityId = `emp-${makeId('entity')}`;
+
+  const events = [
+    { eventType: 'EmployeeCreated' as const, eventVersion: 1, activeEmployees: 1, archivedEmployees: 0 },
+    { eventType: 'EmployeeArchived' as const, eventVersion: 2, activeEmployees: 0, archivedEmployees: 1 },
+    { eventType: 'EmployeeRestored' as const, eventVersion: 3, activeEmployees: 1, archivedEmployees: 0 },
+    { eventType: 'EmployeeDeleted' as const, eventVersion: 4, activeEmployees: 0, archivedEmployees: 0 },
+  ];
+
+  for (const event of events) {
+    const inbox = await hrmReconciliationService.ingestEvent({
+      eventId: `hrm-${event.eventType}-${event.eventVersion}-${entityId}`,
+      organizationId,
+      entityId,
+      eventVersion: event.eventVersion,
+      eventType: event.eventType,
+    });
+
+    await processInboxRecord(inbox as never);
+
+    const usage = await UsageModel.findOne({ organization: organization._id }).lean();
+    assert.equal(usage?.activeEmployees, event.activeEmployees);
+    assert.equal(usage?.archivedEmployees, event.archivedEmployees);
+  }
+
+  const staleInbox = await hrmReconciliationService.ingestEvent({
+    eventId: `hrm-stale-${entityId}`,
+    organizationId,
+    entityId,
+    eventVersion: 2,
+    eventType: 'EmployeeArchived',
+  });
+
+  await processInboxRecord(staleInbox as never);
+
+  const usage = await UsageModel.findOne({ organization: organization._id }).lean();
+  assert.equal(usage?.activeEmployees, 0);
+  assert.equal(usage?.archivedEmployees, 0);
+});
+
 test('queue claim loss returns null instead of double processing', async () => {
   const { invoice } = await createBillingContext('starter', 1000);
   const orderedInvoice = await billingService.createRazorpayOrderForInvoice(String(invoice._id));

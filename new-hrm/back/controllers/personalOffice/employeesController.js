@@ -10,7 +10,14 @@ const SubTask = require("../../models/personalOffice/SubtaskModel.js");
 const Company = require("../../models/personalOffice/companyModel.js");
 const mongoose = require("mongoose");
 const { generateAccessToken, generateRefreshToken } = require("../../service/service.js")
+const { buildUserSubscriptionFields } = require("../../service/tokenClaimsService.js");
 const AccessRole = require("../../models/personalOffice/roleModel.js");
+const {
+  mapEmployeeStatusTransition,
+  publishEmployeeLifecycleEvent,
+} = require("../../service/employeeLifecycleEventService.js");
+const { checkCanAddEmployee } = require("../../service/employeeLimitService.js");
+const { recordAuditEvent } = require("../../service/auditService.js");
 
 
 
@@ -57,6 +64,35 @@ const addEmployee = async (req, res) => {
     const exists = await Employee.findOne({ email });
     if (exists) {
       return res.status(400).json({ message: "Employee already exists" });
+    }
+
+    const organizationId = req.user?.companyId || companyId;
+
+    const limitCheck = await checkCanAddEmployee(organizationId, 1);
+    if (!limitCheck.allowed) {
+      await recordAuditEvent({
+        actorId: req.user?.id || userId || null,
+        actorRole: req.user?.role || "admin",
+        companyId: String(organizationId),
+        action: "EMPLOYEE_LIMIT_DENIED",
+        resourceType: "employee",
+        resourceId: email,
+        metadata: {
+          code: limitCheck.code,
+          activeCount: limitCheck.activeCount,
+          requestedEmployees: limitCheck.requestedEmployees,
+          limit: limitCheck.limit ?? null,
+        },
+      });
+
+      return res.status(limitCheck.upgradeRequired ? 402 : 403).json({
+        code: limitCheck.code,
+        message: limitCheck.message,
+        activeCount: limitCheck.activeCount,
+        requestedEmployees: limitCheck.requestedEmployees,
+        limit: limitCheck.limit ?? null,
+        upgradeRequired: Boolean(limitCheck.upgradeRequired),
+      });
     }
 
     // 🔐 Hash password
@@ -117,7 +153,7 @@ const addEmployee = async (req, res) => {
       lpa: Number(lpa || 0),
       remarks: remarks || "",
       // 🔐 company isolation
-      createdBy: companyId,          // 🔐 admin who created
+      createdBy: organizationId || companyId,
 
       profileImage: await upload(files?.profileImage?.[0]),
       documents: {
@@ -149,7 +185,16 @@ console.log(employee);
 await employee.save();
 
 console.log("========= EMPLOYEE SAVED =========");
-    await recentActivity.create({ title: "New Employee Added.", createdBy: userId, createdByRole: "Admin", companyId: companyId })
+    await publishEmployeeLifecycleEvent({
+      eventType: "EmployeeCreated",
+      employee,
+      organizationId: organizationId || companyId,
+      payload: {
+        sourceController: "addEmployee",
+        status: employee.status,
+      },
+    });
+    await recentActivity.create({ title: "New Employee Added.", createdBy: userId, createdByRole: "Admin", companyId: organizationId || companyId })
 
     return res.status(201).json({
       message: "Employee added successfully",
@@ -216,7 +261,8 @@ const loginEmployee = async (req, res) => {
       companyId: user.createdBy?._id || null,
     };
 
-    const accessToken = generateAccessToken(payload);
+    const subscriptionFields = await buildUserSubscriptionFields(user, { accountType: "employee" });
+    const accessToken = generateAccessToken(subscriptionFields.tokenInput);
     const refreshToken = generateRefreshToken({ id: user._id });
 
     // 6️⃣ Save refresh token in DB
@@ -254,6 +300,8 @@ const loginEmployee = async (req, res) => {
         ...userData,
         role: "employee",
         fullName: userData.fullName,
+        entitlements: subscriptionFields.entitlements,
+        subscriptionPlan: subscriptionFields.subscriptionPlan,
       },
     });
 
@@ -275,9 +323,24 @@ const updateEmployeeStatus = async (req, res) => {
     const employee = await Employee.findOne({ _id: employeeId, createdBy: companyId });
     if (!employee) return res.status(404).json({ message: "Employee Not Found." });
 
+    const previousStatus = employee.status;
     employee.status = status;
     employee.relievingDate = null;
-    employee.save();
+    await employee.save();
+
+    const eventType = mapEmployeeStatusTransition(previousStatus, employee.status);
+    if (eventType) {
+      await publishEmployeeLifecycleEvent({
+        eventType,
+        employee,
+        organizationId: companyId,
+        payload: {
+          sourceController: "updateEmployeeStatus",
+          previousStatus,
+          nextStatus: employee.status,
+        },
+      });
+    }
     res.status(200).json({ message: "Employee Status Active Successfully." });
 
   }
@@ -386,6 +449,8 @@ console.log(req.body);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
+
+    const previousStatus = employee.status;
 
     if (updates.password) {
       // Check if new password is same as current password
@@ -523,6 +588,20 @@ console.log(req.body);
       { new: true }
     );
 
+    const eventType = mapEmployeeStatusTransition(previousStatus, updatedEmployee?.status);
+    if (eventType) {
+      await publishEmployeeLifecycleEvent({
+        eventType,
+        employee: updatedEmployee,
+        organizationId: updates.companyId,
+        payload: {
+          sourceController: "updateEmployee",
+          previousStatus,
+          nextStatus: updatedEmployee.status,
+        },
+      });
+    }
+
     if (historyEntries.length > 0) {
       await EmployeeHistory.insertMany(historyEntries);
     }
@@ -628,6 +707,17 @@ const deleteEmployee = async (req, res) => {
       return res.status(404).json({ message: "Employee not found or access denied" });
     }
 
+    await publishEmployeeLifecycleEvent({
+      eventType: "EmployeeDeleted",
+      employee: deletedEmployee,
+      organizationId: companyId,
+      eventVersion: Date.now(),
+      payload: {
+        sourceController: "deleteEmployee",
+        previousStatus: deletedEmployee.status,
+      },
+    });
+
     return res.status(200).json({ message: "Employee deleted successfully" });
   } catch (err) {
     return res.status(500).json({ message: "Server error" });
@@ -649,7 +739,7 @@ const relieveEmployee = async (req, res) => {
     if (!companyId) {
       return res.status(400).json({ message: "companyId  is required" });
     }
-    const employee = await Employee.findByIdAndUpdate({ _id: id, createdBy: companyId });
+    const employee = await Employee.findOne({ _id: id, createdBy: companyId });
 
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
@@ -658,6 +748,8 @@ const relieveEmployee = async (req, res) => {
     if (employee.status === "RELIEVED") {
       return res.status(400).json({ message: "Employee is already relieved" });
     }
+
+    const previousStatus = employee.status;
 
     // Update employee status
     employee.status = "RELIEVED";
@@ -676,6 +768,19 @@ console.log(employee);
 await employee.save();
 
 console.log("========= EMPLOYEE SAVED =========");
+    const eventType = mapEmployeeStatusTransition(previousStatus, employee.status);
+    if (eventType) {
+      await publishEmployeeLifecycleEvent({
+        eventType,
+        employee,
+        organizationId: companyId,
+        payload: {
+          sourceController: "relieveEmployee",
+          previousStatus,
+          nextStatus: employee.status,
+        },
+      });
+    }
 
     await EmployeeHistory.create({
       employeeId: employee._id,

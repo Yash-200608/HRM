@@ -1,8 +1,11 @@
 import mongoose from 'mongoose';
+import { createMongooseDb } from '../../../packages/shared-db/src/mongoose-session.mjs';
 import { env } from './env';
 import { logger } from './logger';
 import { AppError } from '../common/errors/app-error';
 import { ErrorCodes } from '../common/errors/error-codes';
+
+const db = createMongooseDb(mongoose);
 
 async function assertTransactionSupport() {
   if (!mongoose.connection.db) {
@@ -20,7 +23,7 @@ async function assertTransactionSupport() {
 
 export async function connectMongo() {
   mongoose.set('strictQuery', true);
-  await mongoose.connect(env.MONGODB_URI, {
+  await db.connect(env.MONGODB_URI, {
     autoIndex: true,
   });
   await assertTransactionSupport();

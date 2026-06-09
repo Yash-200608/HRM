@@ -1,5 +1,10 @@
 const express = require("express");
 const router = express.Router();
+const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
+const { requireWritableTenant } = require("../middleware/requireWritableTenant.js");
+
+const leaveAccess = enforceModuleAccess("leave");
+const leaveMutationGuard = requireWritableTenant();
 
 const {
   applyLeave,
@@ -58,7 +63,7 @@ const {
  *       201:
  *         description: Leave applied successfully
  */
-router.post("/apply", applyLeave);
+router.post("/apply", leaveMutationGuard, leaveAccess, applyLeave);
 
 /**
  * @swagger
@@ -72,7 +77,7 @@ router.post("/apply", applyLeave);
  *       200:
  *         description: List of leave requests
  */
-router.get("/my/:userId", getMyLeaveRequests);
+router.get("/my/:userId", leaveAccess, getMyLeaveRequests);
 
 /**
  * @swagger
@@ -86,7 +91,7 @@ router.get("/my/:userId", getMyLeaveRequests);
  *       200:
  *         description: All leave requests fetched
  */
-router.get("/:companyId", getAllLeaveRequests);
+router.get("/:companyId", leaveAccess, getAllLeaveRequests);
 
 /**
  * @swagger
@@ -106,9 +111,9 @@ router.get("/:companyId", getAllLeaveRequests);
  *       200:
  *         description: Leave request details
  */
-router.get("/:id", getLeaveRequestById);
-router.get("/my/:userId/date", getMyLeaveRequestsByDate);
-router.get("/leave/dashboard", getEmployeeLeaveSummary);
+router.get("/:id", leaveAccess, getLeaveRequestById);
+router.get("/my/:userId/date", leaveAccess, getMyLeaveRequestsByDate);
+router.get("/leave/dashboard", leaveAccess, getEmployeeLeaveSummary);
 
 /**
  * @swagger
@@ -141,7 +146,7 @@ router.get("/leave/dashboard", getEmployeeLeaveSummary);
  *       200:
  *         description: Leave status updated
  */
-router.put("/status", updateLeaveStatus);
+router.put("/status", leaveMutationGuard, leaveAccess, updateLeaveStatus);
 
 /**
  * @swagger
@@ -161,6 +166,6 @@ router.put("/status", updateLeaveStatus);
  *       200:
  *         description: Leave request deleted
  */
-router.delete("/:id", deleteLeaveRequest);
+router.delete("/:id", leaveMutationGuard, leaveAccess, deleteLeaveRequest);
 
 module.exports = router;

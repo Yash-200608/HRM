@@ -1,0 +1,32 @@
+{
+  "name": "hrm-subscription-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Incremental monorepo workspace for the HRM and subscription billing systems.",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "new-hrm/back",
+    "new-hrm/frontend",
+    "Subscription",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build:subscription && npm run build:hrm:frontend",
+    "build:subscription": "cd Subscription && npm run build",
+    "build:hrm:frontend": "cd new-hrm/frontend && npm run build",
+    "check:hrm:backend": "node --check new-hrm/back/app.js",
+    "typecheck": "npm run typecheck:subscription && npm run typecheck:hrm:frontend",
+    "typecheck:subscription": "npm exec --prefix Subscription -- tsc -p Subscription/tsconfig.json --noEmit",
+    "typecheck:hrm:frontend": "npm exec --prefix new-hrm/frontend -- tsc -b new-hrm/frontend/tsconfig.json",
+    "test:subscription": "cd Subscription && npm test",
+    "smoke:integration": "powershell -ExecutionPolicy Bypass -File scripts/smoke-integration.ps1",
+    "lint:hrm:frontend": "cd new-hrm/frontend && npm run lint"
+  },
+  "dependencies": {
+    "@sentry/node": "^10.57.0",
+    "@sentry/profiling-node": "^10.57.0",
+    "posthog-node": "^5.36.7"
+  }
+}

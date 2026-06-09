@@ -16,7 +16,7 @@
     "local:bootstrap": "npm run local:up && npm run seed:plans && npm run seed:admin",
     "seed:plans": "tsx src/bootstrap/seed-plans.ts",
     "seed:admin": "tsx src/bootstrap/seed-admin.ts",
-    "test": "tsx --test test/app.test.ts test/invoice-pdf.test.ts test/security.test.ts test/seed-admin.test.ts test/operator-auth-flows.test.ts test/localstack-s3.test.ts test/integration-flows.test.ts test/production-hardening.test.ts",
+    "test": "tsx --test test/app.test.ts test/hrm-jwt.test.ts test/invoice-pdf.test.ts test/security.test.ts test/seed-admin.test.ts test/operator-auth-flows.test.ts test/localstack-s3.test.ts test/integration-flows.test.ts test/production-hardening.test.ts",
     "test:localstack": "tsx --test test/localstack-s3.test.ts"
   },
   "engines": {
@@ -35,6 +35,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
     "morgan": "^1.10.1",
+    "posthog-node": "^5.36.7",
     "zod": "^4.0.17"
   },
   "devDependencies": {

@@ -15,6 +15,7 @@ import { archiveService } from '../archive/archive.service';
 import { metrics } from '../../common/observability/metrics';
 import { creditLedgerService } from './credit-ledger.service';
 import { paymentSagaService } from './payment-saga.service';
+import { assertHrmOrganizationExists, assertSameHrmOrganization } from '../organizations/organization-ownership.service';
 
 function makeInvoiceNumber() {
   return `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -367,6 +368,7 @@ export const billingService = {
       const tax = Math.round(subtotal * 0.18);
       const total = subtotal + tax;
       const organizationId = asId(subscription.organization);
+      await assertHrmOrganizationExists(organizationId, { session });
       await archiveService.assertOrganizationWritable(organizationId);
 
       const invoiceKey = options?.invoiceKey ?? options?.idempotencyKey ?? null;
@@ -494,6 +496,7 @@ export const billingService = {
       if (!invoice) {
         throw new AppError('Invoice not found', 404, ErrorCodes.NotFound);
       }
+      await assertHrmOrganizationExists(asId(invoice.organization), { session });
 
       if (invoice.status !== 'DRAFT') {
         return invoice;
@@ -533,6 +536,7 @@ export const billingService = {
     if (!invoice) {
       throw new AppError('Invoice not found', 404, ErrorCodes.NotFound);
     }
+    await assertHrmOrganizationExists(asId(invoice.organization));
 
     const pdf = generateInvoicePdfBuffer({
       invoiceNumber: invoice.invoiceNumber,
@@ -576,6 +580,7 @@ export const billingService = {
       if (!invoice) {
         throw new AppError('Invoice not found', 404, ErrorCodes.NotFound);
       }
+      await assertHrmOrganizationExists(asId(invoice.organization));
 
       if (invoice.providerOrderId) {
         const saga = await paymentSagaService.ensureSagaForInvoice({
@@ -660,6 +665,7 @@ export const billingService = {
       if (!invoice) {
         throw new AppError('Invoice not found for payment capture', 404, ErrorCodes.NotFound);
       }
+      await assertHrmOrganizationExists(asId(invoice.organization));
 
       if (existingPayment?.status === 'REFUNDED' && invoice.status === 'REFUNDED') {
         return existingPayment;
@@ -826,6 +832,7 @@ export const billingService = {
       if (!invoice) {
         throw new AppError('Invoice not found for refund', 404, ErrorCodes.NotFound);
       }
+      await assertHrmOrganizationExists(asId(invoice.organization));
 
       if (currentPayment?.status === 'REFUNDED' && invoice.status === 'REFUNDED') {
         return currentPayment;
@@ -987,6 +994,7 @@ export const billingService = {
       if (!invoice) {
         throw new AppError('Invoice not found', 404, ErrorCodes.NotFound);
       }
+      await assertHrmOrganizationExists(asId(invoice.organization), { session });
 
       if (invoice.status === 'PAID' || invoice.status === 'VOID' || invoice.status === 'CANCELLED' || invoice.status === 'REFUNDED') {
         return invoice;
@@ -1028,6 +1036,7 @@ export const billingService = {
       if (!invoice) {
         throw new AppError('Invoice not found', 404, ErrorCodes.NotFound);
       }
+      await assertHrmOrganizationExists(asId(invoice.organization), { session });
 
       const providerPaymentId = payment.providerPaymentId ?? `manual:${String(invoice._id)}`;
       const result = await commitCapturedPaymentTransaction(
@@ -1059,6 +1068,13 @@ export const billingService = {
     return withTransaction(async (session) => execute(session));
   },
   recordPayment: async (input: { invoiceId: string; organizationId: string; amount: number; providerPaymentId?: string }) => {
+    await assertHrmOrganizationExists(input.organizationId);
+    const invoice = await billingRepository.findInvoiceById(input.invoiceId);
+    if (!invoice) {
+      throw new AppError('Invoice not found', 404, ErrorCodes.NotFound);
+    }
+    assertSameHrmOrganization(input.organizationId, asId(invoice.organization));
+
     return billingRepository.createPayment({
       publicId: createPublicId('pay'),
       invoice: input.invoiceId,
@@ -1072,6 +1088,7 @@ export const billingService = {
     });
   },
   applyCredit: async (input: { organizationId: string; subscriptionId?: string; amount: number; sourceType: 'PRORATION' | 'MANUAL_ADJUSTMENT' | 'GOODWILL' | 'REFUND' | 'OVERPAYMENT' | 'INVOICE_APPLIED' | 'RECONCILIATION'; note?: string; invoiceId?: string }) => {
+    await assertHrmOrganizationExists(input.organizationId);
     return creditLedgerService.addCredit({
       organizationId: input.organizationId,
       subscriptionId: input.subscriptionId,
@@ -1082,6 +1099,7 @@ export const billingService = {
     });
   },
   getCreditBalance: async (organizationId: string) => {
+    await assertHrmOrganizationExists(organizationId);
     return creditLedgerService.getMaterializedBalance(organizationId);
   },
   renewSubscription: async (subscriptionId: string) => {

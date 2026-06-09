@@ -1,7 +1,31 @@
 
 const express = require("express");
 const { registerAdmin, updateAdmin, deleteAdmin, loginAdmin, getUserById, updateUser, changePassword,
-  getAllAdmins, adminStatusChange, refresh, getUserWeeklyAttendanceReport, getDashboardSummary, analyticsReport, getNotificationData, deleteNotifications, deleteAllNotifications, markAsReadNotifications } = require("../controllers/personalOffice/authController");
+  getAllAdmins, adminStatusChange, refresh, logout, getUserWeeklyAttendanceReport, getDashboardSummary, analyticsReport, getNotificationData, deleteNotifications, deleteAllNotifications, markAsReadNotifications } = require("../controllers/personalOffice/authController");
+const {
+  startOAuth,
+  startOAuthLink,
+  handleOAuthCallback,
+  consumeOAuthSession,
+  listOAuthIdentities,
+  revokeOAuthIdentity,
+  disableOAuthIdentity,
+  auditOAuthIdentity,
+  listOAuthSecurityEvents,
+  forceLogoutAllOAuthSessions,
+  forceOAuthReauthentication,
+} = require("../service/oauthService.js");
+
+const authMiddleware = require("../middleware/authMiddleware.js");
+const {
+  requestPasswordResetHandler,
+  confirmPasswordResetHandler,
+  setupMfaHandler,
+  enableMfaHandler,
+  disableMfaHandler,
+  regenerateRecoveryCodesHandler,
+  verifyMfaLoginHandler,
+} = require("../controllers/personalOffice/securityController.js");
 
 const router = express.Router();
 
@@ -83,7 +107,29 @@ router.post("/register", registerAdmin);
  *         description: Server error
  */
 router.post("/login", loginAdmin);
+router.post("/password-reset/request", requestPasswordResetHandler);
+router.post("/password-reset/confirm", confirmPasswordResetHandler);
+router.post("/mfa/verify-login", verifyMfaLoginHandler);
+router.post("/mfa/setup", authMiddleware, setupMfaHandler);
+router.post("/mfa/enable", authMiddleware, enableMfaHandler);
+router.post("/mfa/disable", authMiddleware, disableMfaHandler);
+router.post("/mfa/recovery-codes/regenerate", authMiddleware, regenerateRecoveryCodesHandler);
+router.get("/google", startOAuth("google"));
+router.post("/oauth/link/google", startOAuthLink("google"));
+router.get("/google/callback", handleOAuthCallback("google"));
+router.get("/microsoft", startOAuth("microsoft"));
+router.post("/oauth/link/microsoft", startOAuthLink("microsoft"));
+router.get("/microsoft/callback", handleOAuthCallback("microsoft"));
+router.get("/oauth/session", consumeOAuthSession);
+router.get("/oauth/identities", listOAuthIdentities);
+router.get("/oauth/identities/:id/audit", auditOAuthIdentity);
+router.patch("/oauth/identities/:id/revoke", revokeOAuthIdentity);
+router.patch("/oauth/identities/:id/disable", disableOAuthIdentity);
+router.get("/oauth/security-events", listOAuthSecurityEvents);
+router.post("/oauth/incident/force-logout-all", forceLogoutAllOAuthSessions);
+router.post("/oauth/incident/force-reauth", forceOAuthReauthentication);
 router.post("/refreshtoken", refresh);
+router.post("/logout", logout);
 router.put("/update/:id", updateAdmin);
 router.delete("/delete", deleteAdmin);
 router.get("/get/:id", getAllAdmins);

@@ -8,7 +8,7 @@ const NotificationSchema = new Schema(
     userModel: { type: String, enum: ["Admin", "Employee"], required: true },
     type: {
       type: String,
-      enum: ["task", "subtask", "leave", "general", "attendance", "project", "department"],
+      enum: ["task", "subtask", "leave", "general", "attendance", "project", "department", "billing"],
       required: true,
     },
     message: { type: String, required: true },

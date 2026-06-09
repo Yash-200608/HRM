@@ -1,0 +1,13 @@
+{
+  "name": "@hrm-subscription/shared-db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./mongoose-session": {
+      "import": "./src/mongoose-session.mjs",
+      "require": "./src/mongoose-session.cjs",
+      "types": "./src/mongoose-session.d.mts"
+    }
+  }
+}

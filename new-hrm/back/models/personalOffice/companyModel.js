@@ -52,12 +52,41 @@ const companySchema = new mongoose.Schema({
     default: true 
   },
 
+  // Billing fields owned by Subscription; HRM reads for enforcement (additive contract).
+  status: {
+    type: String,
+    enum: ["ACTIVE", "SUSPENDED", "ARCHIVED", "PURGED"],
+    default: "ACTIVE",
+  },
+  planCode: {
+    type: String,
+    default: "free",
+  },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
+  archivedAt: {
+    type: Date,
+    default: null,
+  },
+  suspendedAt: {
+    type: Date,
+    default: null,
+  },
+
   attendanceRules: {
   clockInTime: { type: String, default: "09:00" },   // expected clock-in
   fullDayHours: { type: Number, default: 8 },        // hours for full day
   halfDayHours: { type: Number, default: 4 },        // min hours for half day
-}
+},
 
+  scim: {
+    enabled: { type: Boolean, default: false },
+    tokenHash: { type: String, default: null, select: false },
+    tokenPrefix: { type: String, default: null },
+    lastRotatedAt: { type: Date, default: null },
+  },
 
 }, { timestamps: true }); // 👈 createdAt & updatedAt auto
 

@@ -11,6 +11,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import axios from "axios";
 import { Helmet } from "react-helmet-async";
+import OAuthButtons from "@/components/auth/OAuthButtons";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -310,6 +311,8 @@ const handleSubmit = async (e: React.FormEvent) => {
                 )}
 
               </Button>
+
+              <OAuthButtons disabled={loading} role="employee" />
 
             </form>
 

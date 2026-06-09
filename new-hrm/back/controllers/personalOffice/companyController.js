@@ -6,6 +6,7 @@ const { Employee } = require("../../models/personalOffice/employeeModel.js");
 const Project = require("../../models/personalOffice/projectModel.js");
 const recentActivity = require("../../models/personalOffice/recentActivityModel.js");
 const {SuperAdmin} = require("../../models/personalOffice/superadminModel");
+const { provisionTrialSubscription } = require("../../service/trialProvisioningService.js");
 
 /* -------------------------------------------------
    ADD COMPANY (Super Admin only) with Cloudinary Logo
@@ -51,9 +52,26 @@ const addCompany = async (req, res) => {
       admins: []
     });
 
+    let trialProvisioning = null;
+    try {
+      trialProvisioning = await provisionTrialSubscription(company._id, {
+        actorId: superAdminId,
+        actorRole: "super_admin",
+        correlationId: req.correlationId,
+      });
+    } catch (trialError) {
+      console.error("Trial provisioning failed for company", company._id, trialError.message);
+      trialProvisioning = {
+        provisioned: false,
+        error: trialError.message,
+        status: trialError.status ?? 500,
+      };
+    }
+
     res.status(201).json({
       message: "Company created successfully",
-      company
+      company,
+      trialProvisioning,
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });

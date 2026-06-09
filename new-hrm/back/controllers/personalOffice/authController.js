@@ -1,5 +1,6 @@
 const { Admin } = require("../../models/personalOffice/authModel.js");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const { Employee } = require("../../models/personalOffice/employeeModel.js"); // adjust path if needed
 const Company = require("../../models/personalOffice/companyModel.js");
 const { Expense } = require("../../models/personalOffice/expenseModel.js");
@@ -16,8 +17,13 @@ const Holiday = require("../../models/personalOffice/Holiday.js");
 const Notification = require("../../models/personalOffice/NotificationModel.js"); // Notification model
 const recentActivity = require("../../models/personalOffice/recentActivityModel.js");
 const { generateAccessToken, generateRefreshToken } = require("../../service/service.js")
+const { buildAccessTokenInput, buildUserSubscriptionFields } = require("../../service/tokenClaimsService.js");
+const { getAccountTypeFromRole } = require("../../service/sessionSecurityService.js");
 const { SuperAdmin } = require("../../models/personalOffice/superadminModel");
 const sendEmail = require("../../service/mailService.js");
+const { clearAuthCookies, revokeRequestRefreshTokens } = require("../../service/sessionSecurityService.js");
+const { shouldRequireMfa } = require("../../service/mfaService.js");
+const { buildMfaLoginChallenge } = require("./securityController.js");
 
 // ---------------- Register Admin ----------------
 
@@ -98,6 +104,9 @@ const registerAdmin = async (req, res) => {
     });
 
   } catch (err) {
+    console.error("===== LOGIN ERROR =====");
+    console.error(err);
+    console.error(err.stack);
     return res.status(500).json({ message: "Server error" });
   }
 };
@@ -236,7 +245,7 @@ const loginAdmin = async (req, res) => {
     // 1️⃣ Try Admin login
     user = await Admin.findOne({ email })
       .populate("companyId", "name logo")
-      .select("+password");
+      .select("+password +mfaSecret");
 
     if (!user) {
       return res.status(400).json({ message: "Invalid email" });
@@ -248,6 +257,14 @@ const loginAdmin = async (req, res) => {
       return res.status(400).json({ message: "Invalid password" });
     }
 
+    if (shouldRequireMfa(user)) {
+      const challenge = await buildMfaLoginChallenge(user);
+      return res.status(200).json({
+        message: "MFA verification required",
+        ...challenge,
+      });
+    }
+
     // 4️⃣ Generate Access + Refresh Token
     const payload = {
       id: user._id,
@@ -255,11 +272,10 @@ const loginAdmin = async (req, res) => {
       companyId: user.companyId?._id || null,
     };
 
-    const accessToken = generateAccessToken({
-  id: user._id.toString(),
-  role: user.role,
-  companyId: user.companyId?._id || null,
-});
+    const subscriptionFields = await buildUserSubscriptionFields(user, {
+      accountType: getAccountTypeFromRole(user.role),
+    });
+    const accessToken = generateAccessToken(subscriptionFields.tokenInput);
     const refreshToken = generateRefreshToken({ id: user._id });
 
     // 🔥 Save refresh token in DB
@@ -291,6 +307,8 @@ const loginAdmin = async (req, res) => {
         ...userData,
         role: user?.role,
         fullName: userData.username,
+        entitlements: subscriptionFields.entitlements,
+        subscriptionPlan: subscriptionFields.subscriptionPlan,
       },
     });
 
@@ -320,11 +338,9 @@ const refresh = async (req, res) => {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
-    const newAccessToken = generateAccessToken({
-  id: user._id.toString(),
-  role: user.role,
-  companyId: user.companyId || user.createdBy || null,
-});
+    const newAccessToken = generateAccessToken(
+      await buildAccessTokenInput(user, { accountType: getAccountTypeFromRole(user.role) })
+    );
 
     return res.json({ accessToken: newAccessToken });
 
@@ -334,23 +350,18 @@ const refresh = async (req, res) => {
 };
 
 const logout = async (req, res) => {
-  const token = req.cookies.refreshToken;
-  await SuperAdmin.findOneAndUpdate(
-    { refreshToken: token },
-    { refreshToken: null }
-  );
-  await Admin.findOneAndUpdate(
-    { refreshToken: token },
-    { refreshToken: null }
-  );
-
-  await Employee.findOneAndUpdate(
-    { refreshToken: token },
-    { refreshToken: null }
-  );
-
-  res.clearCookie("refreshToken");
-  res.json({ message: "Logged out successfully" });
+  try {
+    const result = await revokeRequestRefreshTokens(req);
+    clearAuthCookies(res);
+    return res.json({
+      message: "Logged out successfully",
+      refreshTokenRevoked: result.refreshTokenRevoked,
+      accountRevoked: result.accountRevoked,
+    });
+  } catch (err) {
+    clearAuthCookies(res);
+    return res.status(500).json({ message: "Logout failed" });
+  }
 };
 
 
@@ -395,13 +406,13 @@ const getUserById = async (req, res) => {
     }
 
     user = await Employee.findOne({
-  _id: userId,
-  createdBy: companyId,
-})
-.select("-password")
-.populate("createdBy", "name _id")
-.populate("department", "name managers")
-.populate("assignedRole");
+      _id: userId,
+      createdBy: companyId,
+    })
+      .select("-password")
+      .populate("createdBy", "name _id")
+      .populate("department", "name managers")
+      .populate("assignedRole");
 
     if (user) {
       role = user.role || "employee";
@@ -693,11 +704,11 @@ const getDashboardSummary = async (req, res) => {
     const now = new Date();
     const today = new Date();
 
-const next7Days = new Date();
-next7Days.setDate(today.getDate() + 7);
+    const next7Days = new Date();
+    next7Days.setDate(today.getDate() + 7);
 
-const currentMonth = today.getMonth() + 1;
-const currentDate = today.getDate();
+    const currentMonth = today.getMonth() + 1;
+    const currentDate = today.getDate();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = now;
 
@@ -705,110 +716,110 @@ const currentDate = today.getDate();
 
     // ================= COMMON DASHBOARD DATA =================
 
-     const user =
+    const user =
       (await SuperAdmin.findOne({ _id: userId, role: "super_admin" })) ||
       (await Admin.findOne({ _id: userId, companyId })) ||
       (await Employee.findOne({ _id: userId, createdBy: companyId }));
 
-// Upcoming Birthdays
-const employees = await Employee.find({
-  createdBy: companyId
-}).select("fullName profileImage dateOfBirth");
+    // Upcoming Birthdays
+    const employees = await Employee.find({
+      createdBy: companyId
+    }).select("fullName profileImage dateOfBirth");
 
-const upcomingBirthdays = employees
-  .filter((emp) => {
+    const upcomingBirthdays = employees
+      .filter((emp) => {
 
-    if (!emp.dateOfBirth) return false;
+        if (!emp.dateOfBirth) return false;
 
-    const dob = new Date(emp.dateOfBirth);
+        const dob = new Date(emp.dateOfBirth);
 
-    return (
-      dob.getMonth() + 1 === currentMonth &&
-      dob.getDate() >= currentDate &&
-      dob.getDate() <= currentDate + 7
-    );
-  })
+        return (
+          dob.getMonth() + 1 === currentMonth &&
+          dob.getDate() >= currentDate &&
+          dob.getDate() <= currentDate + 7
+        );
+      })
 
-  .sort((a, b) => {
-    return (
-      new Date(a.dateOfBirth).getDate() -
-      new Date(b.dateOfBirth).getDate()
-    );
-  });
+      .sort((a, b) => {
+        return (
+          new Date(a.dateOfBirth).getDate() -
+          new Date(b.dateOfBirth).getDate()
+        );
+      });
 
-// Upcoming Leaves
-today.setHours(0, 0, 0, 0);
+    // Upcoming Leaves
+    today.setHours(0, 0, 0, 0);
 
-next7Days.setDate(next7Days.getDate() + 7);
-next7Days.setHours(23, 59, 59, 999);
+    next7Days.setDate(next7Days.getDate() + 7);
+    next7Days.setHours(23, 59, 59, 999);
 
-let upcomingLeaves = [];
+    let upcomingLeaves = [];
 
-if (user.role === "admin") {
+    if (user.role === "admin") {
 
-  upcomingLeaves = await LeaveRequest.find({
-    createdBy: companyId,
-    fromDate: {
-      $gte: today,
-      $lte: next7Days,
-    },
-  })
-    .populate("user", "fullName profileImage")
-    .sort({ fromDate: 1 });
+      upcomingLeaves = await LeaveRequest.find({
+        createdBy: companyId,
+        fromDate: {
+          $gte: today,
+          $lte: next7Days,
+        },
+      })
+        .populate("user", "fullName profileImage")
+        .sort({ fromDate: 1 });
 
-} else {
+    } else {
 
-  const permissions = user?.assignedRole?.permissions || {};
+      const permissions = user?.assignedRole?.permissions || {};
 
-  const canViewAllLeaves =
-    permissions?.leave?.view === true;
+      const canViewAllLeaves =
+        permissions?.leave?.view === true;
 
-  if (canViewAllLeaves) {
+      if (canViewAllLeaves) {
 
-    upcomingLeaves = await LeaveRequest.find({
-      createdBy: companyId,
-      fromDate: {
+        upcomingLeaves = await LeaveRequest.find({
+          createdBy: companyId,
+          fromDate: {
+            $gte: today,
+            $lte: next7Days,
+          },
+        })
+          .populate("user", "fullName profileImage")
+          .sort({ fromDate: 1 });
+
+      } else {
+
+        upcomingLeaves = await LeaveRequest.find({
+          user: user._id,
+          fromDate: {
+            $gte: today,
+            $lte: next7Days,
+          },
+        })
+          .populate("user", "fullName profileImage")
+          .sort({ fromDate: 1 });
+
+      }
+    }
+
+
+
+
+
+
+
+
+
+    // Upcoming Holidays
+    const upcomingHolidays = await Holiday.find({
+      companyId,
+      date: {
         $gte: today,
-        $lte: next7Days,
-      },
-    })
-      .populate("user", "fullName profileImage")
-      .sort({ fromDate: 1 });
-
-  } else {
-
-    upcomingLeaves = await LeaveRequest.find({
-      user: user._id,
-      fromDate: {
-        $gte: today,
-        $lte: next7Days,
-      },
-    })
-      .populate("user", "fullName profileImage")
-      .sort({ fromDate: 1 });
-
-  }
-}
-
-
-
-
-
-
-
-
-
-// Upcoming Holidays
-const upcomingHolidays = await Holiday.find({
-  companyId,
-  date: {
-    $gte: today,
-    $lte: next7Days
-  }
-}).sort({ date: 1 });
+        $lte: next7Days
+      }
+    }).sort({ date: 1 });
 
     // Fetch user and role
-   
+
 
     if (!user) return res.status(404).json({ message: "User Not Found" });
 
@@ -823,9 +834,9 @@ const upcomingHolidays = await Holiday.find({
       const urgentTask = await Task.countDocuments({ companyId, status: "pending", urgent: true });
 
       const attendanceThisMonthCount = await Attendance.countDocuments({
-  createdBy: companyId,
-  date: { $gte: startOfMonth, $lte: endOfMonth },
-});
+        createdBy: companyId,
+        date: { $gte: startOfMonth, $lte: endOfMonth },
+      });
 
       const totalPossibleAttendance = totalEmployees * now.getDate();
       const attendancePercentage = totalPossibleAttendance
@@ -994,32 +1005,32 @@ const analyticsReport = async (req, res) => {
     if (!company) return res.status(404).json({ message: "Company Not Found." });
 
     let user = await Admin.findOne({
-  _id: userId,
-  companyId,
-});
+      _id: userId,
+      companyId,
+    });
 
-if (!user) {
-  user = await Employee.findOne({
-    _id: userId,
-    createdBy: companyId,
-  }).populate("assignedRole");
-}
+    if (!user) {
+      user = await Employee.findOne({
+        _id: userId,
+        createdBy: companyId,
+      }).populate("assignedRole");
+    }
 
-if (!user) {
-  return res.status(404).json({
-    message: "User Not Found.",
-  });
-}
+    if (!user) {
+      return res.status(404).json({
+        message: "User Not Found.",
+      });
+    }
 
-const canViewReports =
-  user?.role === "admin" ||
-  user?.assignedRole?.permissions?.reports?.view;
+    const canViewReports =
+      user?.role === "admin" ||
+      user?.assignedRole?.permissions?.reports?.view;
 
-if (!canViewReports) {
-  return res.status(403).json({
-    message: "You are not authorized to view reports.",
-  });
-}
+    if (!canViewReports) {
+      return res.status(403).json({
+        message: "You are not authorized to view reports.",
+      });
+    }
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1040,43 +1051,43 @@ if (!canViewReports) {
       : 0;
 
     // ====== Expense this month ======
-   const expenseThisMonthData = await Expense.aggregate([
-  {
-    $match: {
-      createdBy: new mongoose.Types.ObjectId(companyId),
-      createdAt: { $gte: startOfMonth, $lte: endOfMonth }
-    }
-  },
+    const expenseThisMonthData = await Expense.aggregate([
+      {
+        $match: {
+          createdBy: new mongoose.Types.ObjectId(companyId),
+          createdAt: { $gte: startOfMonth, $lte: endOfMonth }
+        }
+      },
       { $group: { _id: null, totalExpense: { $sum: "$amount" } } },
     ]);
     const expenseThisMonth = expenseThisMonthData[0]?.totalExpense || 0;
-const payrolls = await PayRoll.find({
-  createdBy: companyId
-});
+    const payrolls = await PayRoll.find({
+      createdBy: companyId
+    });
 
-console.log(payrolls);
+    console.log(payrolls);
     // ====== Payroll this month ======
-   const payrollThisMonthData = await PayRoll.aggregate([
-  {
-    $match: {
-      createdBy: new mongoose.Types.ObjectId(companyId),
-      createdAt: { $gte: startOfMonth, $lte: endOfMonth }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalPayroll: {
-        $sum: {
-          $subtract: [
-            { $add: ["$basic", "$allowance"] },
-            "$deductions"
-          ]
+    const payrollThisMonthData = await PayRoll.aggregate([
+      {
+        $match: {
+          createdBy: new mongoose.Types.ObjectId(companyId),
+          createdAt: { $gte: startOfMonth, $lte: endOfMonth }
         }
-      }
-    }
-  },
-]);
+      },
+      {
+        $group: {
+          _id: null,
+          totalPayroll: {
+            $sum: {
+              $subtract: [
+                { $add: ["$basic", "$allowance"] },
+                "$deductions"
+              ]
+            }
+          }
+        }
+      },
+    ]);
     const payrollThisMonth = payrollThisMonthData[0]?.totalPayroll || 0;
 
     // ====== Attendance last 7 days ======
@@ -1084,12 +1095,12 @@ console.log(payrolls);
     sevenDaysAgo.setDate(now.getDate() - 6); // last 7 days including today
 
     const last7DaysAttendance = await Attendance.aggregate([
-  {
-    $match: {
-      createdBy: new mongoose.Types.ObjectId(companyId),
-      date: { $gte: sevenDaysAgo, $lte: now }
-    }
-  },
+      {
+        $match: {
+          createdBy: new mongoose.Types.ObjectId(companyId),
+          date: { $gte: sevenDaysAgo, $lte: now }
+        }
+      },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
