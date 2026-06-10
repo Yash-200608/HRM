@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { userPreferencesSchema } = require("./userPreferencesSchema");
 
 // ---------------- Admin Schema ----------------
 const SuperAdminSchema = new mongoose.Schema(
@@ -43,6 +44,10 @@ const SuperAdminSchema = new mongoose.Schema(
     mfaPendingSecret: { type: String, default: null, select: false },
     mfaRecoveryCodeHashes: { type: [String], default: [], select: false },
     mfaEnrolledAt: { type: Date, default: null },
+    preferences: {
+      type: userPreferencesSchema,
+      default: () => ({}),
+    },
   },
   { timestamps: true } // adds createdAt and updatedAt
 );

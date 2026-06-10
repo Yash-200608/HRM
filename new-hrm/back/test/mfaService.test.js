@@ -5,6 +5,8 @@ const {
   isMfaRole,
   SUPPORTED_MFA_ROLES,
   shouldRequireMfa,
+  assessMfaAtLogin,
+  isMfaEnrollmentRequired,
   generateRecoveryCodes,
   hashRecoveryCode,
   consumeRecoveryCode,
@@ -19,7 +21,51 @@ test("isMfaRole allows admin and super_admin only", () => {
   assert.equal(SUPPORTED_MFA_ROLES.has("admin"), true);
 });
 
-test("shouldRequireMfa requires enabled secret and supported role", () => {
+test("isMfaEnrollmentRequired is true when mandatory policy enabled and MFA not enrolled", () => {
+  const original = process.env.REQUIRE_ADMIN_MFA;
+  process.env.REQUIRE_ADMIN_MFA = "true";
+
+  assert.equal(
+    isMfaEnrollmentRequired({ role: "admin", mfaEnabled: false }),
+    true
+  );
+  assert.equal(
+    isMfaEnrollmentRequired({ role: "admin", mfaEnabled: true }),
+    false
+  );
+
+  process.env.REQUIRE_ADMIN_MFA = original;
+});
+
+test("assessMfaAtLogin reports enrollment and challenge states", () => {
+  const original = process.env.REQUIRE_ADMIN_MFA;
+  process.env.REQUIRE_ADMIN_MFA = "true";
+
+  assert.equal(
+    assessMfaAtLogin({ role: "admin", mfaEnabled: false }).status,
+    "enrollment_required"
+  );
+  assert.equal(
+    assessMfaAtLogin({
+      role: "admin",
+      mfaEnabled: true,
+      mfaSecret: "SECRET",
+    }).status,
+    "challenge_required"
+  );
+  assert.equal(
+    assessMfaAtLogin({
+      role: "admin",
+      mfaEnabled: false,
+      mfaSecret: "SECRET",
+    }).status,
+    "challenge_required"
+  );
+
+  process.env.REQUIRE_ADMIN_MFA = original;
+});
+
+test("shouldRequireMfa requires stored secret and supported role", () => {
   assert.equal(
     shouldRequireMfa({ role: "admin", mfaEnabled: true, mfaSecret: "SECRET" }),
     true
@@ -30,8 +76,24 @@ test("shouldRequireMfa requires enabled secret and supported role", () => {
   );
   assert.equal(
     shouldRequireMfa({ role: "admin", mfaEnabled: false, mfaSecret: "SECRET" }),
+    true
+  );
+  assert.equal(
+    shouldRequireMfa({ role: "admin", mfaEnabled: true, mfaSecret: null }),
     false
   );
+});
+
+test("isMfaEnrollmentRequired is false when MFA secret already exists", () => {
+  const original = process.env.REQUIRE_ADMIN_MFA;
+  process.env.REQUIRE_ADMIN_MFA = "true";
+
+  assert.equal(
+    isMfaEnrollmentRequired({ role: "admin", mfaEnabled: false, mfaSecret: "SECRET" }),
+    false
+  );
+
+  process.env.REQUIRE_ADMIN_MFA = original;
 });
 
 test("otplib verifies generated TOTP codes", () => {

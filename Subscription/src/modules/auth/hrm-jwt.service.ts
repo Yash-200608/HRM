@@ -8,6 +8,8 @@ type HrmJwtPayload = jwt.JwtPayload & {
   companyId?: unknown;
   orgId?: unknown;
   ver?: unknown;
+  iss?: unknown;
+  aud?: unknown;
   principalKind?: unknown;
   tokenVersion?: unknown;
   sessionId?: unknown;
@@ -46,6 +48,17 @@ function buildRoles(principalKind: string | null, role: string | null) {
   }
 
   return [principalKind, ...(role && role !== principalKind ? [role] : [])];
+}
+
+function validateIssuerAndAudience(payload: HrmJwtPayload) {
+  if (payload.ver !== 'v1') {
+    return true;
+  }
+
+  const issuer = asString(payload.iss);
+  const audience = asString(payload.aud);
+
+  return issuer === env.JWT_ISSUER && audience === env.JWT_AUDIENCE;
 }
 
 function toPrincipal(payload: HrmJwtPayload): AuthPrincipal | null {
@@ -94,6 +107,11 @@ export function verifyHrmBearerToken(token: string) {
 
   try {
     const payload = jwt.verify(token, env.HRM_ACCESS_TOKEN_SECRET) as HrmJwtPayload;
+
+    if (!validateIssuerAndAudience(payload)) {
+      return null;
+    }
+
     const principal = toPrincipal(payload);
     return principal ? { payload: principal } : null;
   } catch {

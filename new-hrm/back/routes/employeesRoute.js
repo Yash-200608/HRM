@@ -1,6 +1,8 @@
 const authMiddleware = require("../middleware/authMiddleware");
 const checkPermission = require("../middleware/checkPermission");
+const requireCompanyTenant = require("../middleware/requireCompanyTenant.js");
 const { requireWritableTenant } = require("../middleware/requireWritableTenant.js");
+const { authLoginLimiter } = require("../middleware/rateLimit.js");
 const express = require("express");
 const router = express.Router();
 const upload = require("../middleware/upload.js");
@@ -125,9 +127,14 @@ router.post(
   ]),
   addEmployee
 );
-router.patch("/assign-role", assignRoleToEmployee);
+router.patch(
+  "/assign-role",
+  authMiddleware,
+  checkPermission("employees", "edit"),
+  assignRoleToEmployee
+);
 
-router.post("/login", loginEmployee);
+router.post("/login", authLoginLimiter, loginEmployee);
 
 /**
 * @swagger
@@ -218,7 +225,13 @@ router.put(
   ]),
   updateEmployee
 );
-router.patch("/updateEmployee/status", updateEmployeeStatus)
+router.patch(
+  "/updateEmployee/status",
+  authMiddleware,
+  requireWritableTenant(),
+  checkPermission("employees", "edit"),
+  updateEmployeeStatus
+);
 
 /**
  * @swagger
@@ -260,7 +273,18 @@ router.get(
  *       404:
  *         description: Employee not found
  */
-router.get("/getbyid/:id", getEmployeeById);
+router.get(
+  "/getbyid/:id",
+  authMiddleware,
+  requireCompanyTenant,
+  (req, res, next) => {
+    if (String(req.user.id) === String(req.params.id)) {
+      return next();
+    }
+    return checkPermission("employees", "view")(req, res, next);
+  },
+  getEmployeeById
+);
 
 /**
  * @swagger
@@ -302,7 +326,13 @@ router.delete("/deleteEmployee/:id",
  *       200:
  *         description: Employee relieved successfully
  */
-router.put("/relieveEmployee/:id", relieveEmployee);
+router.put(
+  "/relieveEmployee/:id",
+  authMiddleware,
+  requireWritableTenant(),
+  checkPermission("employees", "edit"),
+  relieveEmployee
+);
 
 /**
  * @swagger
@@ -327,7 +357,12 @@ router.put("/relieveEmployee/:id", relieveEmployee);
  *       200:
  *         description: Document generated successfully
  */
-router.post("/document/generate", generateEmployeeDocument);
+router.post(
+  "/document/generate",
+  authMiddleware,
+  checkPermission("employees", "edit"),
+  generateEmployeeDocument
+);
 
 /**
  * @swagger
@@ -354,7 +389,12 @@ router.post("/document/generate", generateEmployeeDocument);
  *       200:
  *         description: Salary slip generated successfully
  */
-router.post("/salary-slip/generate", generateSalarySlip);
+router.post(
+  "/salary-slip/generate",
+  authMiddleware,
+  checkPermission("payroll", "view"),
+  generateSalarySlip
+);
 
 /**
  * @swagger
@@ -374,7 +414,17 @@ router.post("/salary-slip/generate", generateSalarySlip);
  *       200:
  *         description: List of documents
  */
-router.get("/documents/:employeeId", getEmployeeDocuments);
+router.get(
+  "/documents/:employeeId",
+  authMiddleware,
+  (req, res, next) => {
+    if (String(req.user.id) === String(req.params.employeeId)) {
+      return next();
+    }
+    return checkPermission("employees", "view")(req, res, next);
+  },
+  getEmployeeDocuments
+);
 
 /**
  * @swagger
@@ -399,7 +449,17 @@ router.get("/documents/:employeeId", getEmployeeDocuments);
  *       200:
  *         description: List of documents filtered by type
  */
-router.get("/documents/:employeeId/:documentType", getEmployeeDocumentsByType);
+router.get(
+  "/documents/:employeeId/:documentType",
+  authMiddleware,
+  (req, res, next) => {
+    if (String(req.user.id) === String(req.params.employeeId)) {
+      return next();
+    }
+    return checkPermission("employees", "view")(req, res, next);
+  },
+  getEmployeeDocumentsByType
+);
 
 /**
  * @swagger
@@ -419,6 +479,16 @@ router.get("/documents/:employeeId/:documentType", getEmployeeDocumentsByType);
  *       200:
  *         description: Salary summary details
  */
-router.get("/salary-summary/:employeeId", getSalarySummary);
+router.get(
+  "/salary-summary/:employeeId",
+  authMiddleware,
+  (req, res, next) => {
+    if (String(req.user.id) === String(req.params.employeeId)) {
+      return next();
+    }
+    return checkPermission("payroll", "view")(req, res, next);
+  },
+  getSalarySummary
+);
 
 module.exports = router;

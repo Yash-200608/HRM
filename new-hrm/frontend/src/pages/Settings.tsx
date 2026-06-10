@@ -1,19 +1,22 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings as SettingsIcon, User, Bell, Lock, Eye, EyeOff, ArrowLeft, Palette, Globe, Mail, Calendar, Save, Phone, Building2 } from 'lucide-react';
+import { Settings as SettingsIcon, User, Bell, Lock, Eye, EyeOff, ArrowLeft, Palette, Globe, Mail, Calendar, Save, Phone, Building2, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { getSingleUser, updateUser, updatePassword, getCompanysById, UpdateLeave } from "@/services/Service";
+import { getSingleUser, updateUser, updatePassword, getCompanysById, UpdateLeave, getActiveSessions, revokeAuthSession, revokeOtherAuthSessions } from "@/services/Service";
 import { useToast } from '@/hooks/use-toast';
+import { usePreferences } from "@/contexts/PreferencesContext";
+import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { getSetting, getCompanyDetail } from "@/redux-toolkit/slice/allPage/settingSlice";
 import { useAppDispatch, useAppSelector } from '@/redux-toolkit/hooks/hook';
 import { socket } from "@/socket/socket";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 export function formatDate(isoDate: string | null | undefined): string {
   if (!isoDate) return "-";
@@ -36,14 +39,27 @@ export function formatDate(isoDate: string | null | undefined): string {
 const Settings: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // const [userData, setUserData] = useState<any>(null);
-  const [newPassword, setNewPassword] = useState(null);
-  const [confirmPassword, setConfirmPassword] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [newPasswordShow, setNewPasswordShow] = useState(false);
   const [confirmPasswordShow, setConfirmPasswordShow] = useState(false);
   const [leaves, setLeaves] = useState({ totalLeave: "", specialLeave: "" })
+  const [attendanceRules, setAttendanceRules] = useState({
+    clockInTime: "09:00",
+    fullDayHours: "8",
+    halfDayHours: "4",
+  });
+  const { preferences, saving: savingPreferences, savePreferences } = usePreferences();
+  const [savingCompanySettings, setSavingCompanySettings] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsActionId, setSessionsActionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const languageOptions = ["en", "es", "fr", "de"];
 
   const [formData, setFormData] = useState({
     username: "",
@@ -61,10 +77,32 @@ const Settings: React.FC = () => {
   const userData = useAppSelector((state) => state.setting.setting);
   const companyDetail = useAppSelector((state) => state.setting?.companyDetail);
 
+  const resolveCompanyId = () => {
+    return (
+      resolveCompanyIdFromUser(user) ||
+      resolveCompanyIdFromUser(userData) ||
+      (() => {
+        try {
+          const ls = JSON.parse(localStorage.getItem("user") || "{}");
+          return resolveCompanyIdFromUser(ls);
+        } catch {
+          return null;
+        }
+      })()
+    );
+  };
 
   useEffect(() => {
     if (companyDetail !== null) {
-      setLeaves({ totalLeave: companyDetail?.totalLeave, specialLeave: companyDetail?.specialLeave })
+      setLeaves({
+        totalLeave: companyDetail?.totalLeave ?? "",
+        specialLeave: companyDetail?.specialLeave ?? "",
+      });
+      setAttendanceRules({
+        clockInTime: companyDetail?.attendanceRules?.clockInTime || "09:00",
+        fullDayHours: String(companyDetail?.attendanceRules?.fullDayHours ?? 8),
+        halfDayHours: String(companyDetail?.attendanceRules?.halfDayHours ?? 4),
+      });
     }
   }, [companyDetail])
 
@@ -88,25 +126,106 @@ const Settings: React.FC = () => {
     }
   }, [userData]);
 
-  const handleUpdateLeave = async () => {
-    let obj = { adminId: user?._id, companyId: user?.companyId?._id, specialLeave: leaves?.specialLeave }
+  const handleUpdateCompanySettings = async () => {
+    const companyId = resolveCompanyId();
+    if (!companyId) {
+      toast({ title: t("common.error"), description: t("settings.companyIdMissing"), variant: "destructive" });
+      return;
+    }
+
+    setSavingCompanySettings(true);
+    const obj = {
+      adminId: user?._id,
+      companyId,
+      totalLeave: leaves?.totalLeave,
+      specialLeave: leaves?.specialLeave,
+      attendanceRules: {
+        clockInTime: attendanceRules.clockInTime,
+        fullDayHours: Number(attendanceRules.fullDayHours),
+        halfDayHours: Number(attendanceRules.halfDayHours),
+      },
+    };
+
     try {
       const res = await UpdateLeave(obj);
       if (res.status === 200) {
-        toast({ title: "Update Leave Count.", description: res.data.message });
+        toast({ title: t("settings.companySettingsUpdated"), description: res.data.message });
         setSettingRefresh(true);
       }
-    }
-    catch (err) {
+    } catch (err) {
       console.log(err);
-      toast({ title: "Error Update Leave.", description: err?.response?.data?.message, variant: "destructive" })
+      toast({
+        title: t("common.error"),
+        description: err?.response?.data?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSavingCompanySettings(false);
     }
-  }
+  };
+
+  const handleSavePreferences = async (
+    nextPreferences = preferences,
+    successTitle = t("common.success"),
+    successDescription = t("settings.notificationSavedDesc"),
+  ) => {
+    const saved = await savePreferences(nextPreferences);
+    if (saved) {
+      toast({
+        title: successTitle,
+        description: successDescription,
+      });
+      return;
+    }
+
+    toast({
+      title: t("common.error"),
+      description: t("settings.preferencesError"),
+      variant: "destructive",
+    });
+  };
+
+  const handleLanguageChange = async (language: string) => {
+    const nextPreferences = { ...preferences, language };
+    await handleSavePreferences(
+      nextPreferences,
+      t("settings.languageUpdatedTitle"),
+      t("settings.languageUpdatedDesc", {
+        language: t(`languages.${language}`),
+      }),
+    );
+  };
+
+  const handleCompactViewChange = async (compactView: boolean) => {
+    const nextPreferences = { ...preferences, compactView };
+    await handleSavePreferences(
+      nextPreferences,
+      compactView ? t("settings.compactOnTitle") : t("settings.compactOffTitle"),
+      compactView ? t("settings.compactOnDesc") : t("settings.compactOffDesc"),
+    );
+  };
+
+  const handleNotificationToggle = async (
+    key: keyof typeof preferences.notifications,
+    checked: boolean,
+  ) => {
+    const nextPreferences = {
+      ...preferences,
+      notifications: {
+        ...preferences.notifications,
+        [key]: checked,
+      },
+    };
+    await handleSavePreferences(
+      nextPreferences,
+      t("settings.notificationSavedTitle"),
+      t("settings.notificationSavedDesc"),
+    );
+  };
 
   const handleGetCompanyDetail = async () => {
-
-    const companyId = user?.companyId?._id || user?.createdBy?._id;
-    if (!companyId) return toast({ title: "Error CompanyId.", description: "Company Id Not Found.", variant: "destructive" })
+    const companyId = resolveCompanyId();
+    if (!companyId) return toast({ title: t("common.error"), description: t("settings.companyIdMissing"), variant: "destructive" })
     try {
       const res = await getCompanysById(companyId);
 
@@ -128,7 +247,8 @@ const Settings: React.FC = () => {
   const fetchUser = async () => {
     setPageLoading(true);
     try {
-      const res = await getSingleUser(user?._id, user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const companyCtx = resolveCompanyId() || (user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const res = await getSingleUser(user?._id, companyCtx);
       if (res.status === 200) {
         dispatch(getSetting(res.data.user));
         setSettingRefresh(false);
@@ -147,7 +267,61 @@ const Settings: React.FC = () => {
     }
   }, [user, settingRefresh]);
 
+  const loadSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await getActiveSessions();
+      setSessions(res.data?.sessions || []);
+    } catch (err) {
+      toast({
+        title: t("common.error"),
+        description: t("settings.sessionsLoadFailed"),
+        variant: "destructive",
+      });
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    if (user) {
+      loadSessions();
+    }
+  }, [user]);
+
+  const handleRevokeSession = async (sessionId: string) => {
+    setSessionsActionId(sessionId);
+    try {
+      await revokeAuthSession(sessionId);
+      toast({ title: t("settings.sessionsRevoked") });
+      await loadSessions();
+    } catch (err: any) {
+      toast({
+        title: t("common.error"),
+        description: err?.response?.data?.message || t("common.somethingWentWrong"),
+        variant: "destructive",
+      });
+    } finally {
+      setSessionsActionId(null);
+    }
+  };
+
+  const handleRevokeOtherSessions = async () => {
+    setSessionsActionId("others");
+    try {
+      await revokeOtherAuthSessions();
+      toast({ title: t("settings.sessionsOthersRevoked") });
+      await loadSessions();
+    } catch (err: any) {
+      toast({
+        title: t("common.error"),
+        description: err?.response?.data?.message || t("common.somethingWentWrong"),
+        variant: "destructive",
+      });
+    } finally {
+      setSessionsActionId(null);
+    }
+  };
 
   // Generic input change handler
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,7 +348,8 @@ const Settings: React.FC = () => {
         };
       }
 
-      const res = await updateUser(user?._id, user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id, dataToSend);
+      const companyCtx = resolveCompanyId() || (user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const res = await updateUser(user?._id, companyCtx, dataToSend);
 
       if (res.status === 200) {
 
@@ -186,34 +361,35 @@ const Settings: React.FC = () => {
         }
         localStorage.setItem("user", JSON.stringify(userData));
         socket.emit("refreshProfile");
-        toast({ title: `Profile Update Successfully.`, description: res?.data?.message });
+        toast({ title: t("settings.profileSaved"), description: res?.data?.message });
         setSettingRefresh(true);
       }
     } catch (err) {
       console.log(err);
-      toast({ title: "Error", description: err?.response?.data?.message || "Something went wrong" });
+      toast({ title: t("common.error"), description: err?.response?.data?.message || t("common.somethingWentWrong") });
 
     }
   };
 
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      toast({ title: "Error", description: "Password Or Confirm Password Is Required." }); return;
+      toast({ title: t("common.error"), description: t("settings.passwordRequired") }); return;
     }
     if (newPassword !== confirmPassword) {
-      toast({ title: "Error", description: "Your Password Did Not Match." }); return;
+      toast({ title: t("common.error"), description: t("settings.passwordMismatch") }); return;
     }
     try {
-      const res = await updatePassword(user?._id, userData?.email, newPassword, user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const companyCtx = resolveCompanyId() || (user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const res = await updatePassword(user?._id, userData?.email, newPassword, companyCtx);
       if (res.status === 200) {
-        toast({ title: `Password Changed.`, description: res?.data?.message });
+        toast({ title: t("settings.passwordChanged"), description: res?.data?.message });
         setNewPassword("");
         setConfirmPassword("");
       }
     }
     catch (err) {
       console.log(err);
-      toast({ title: "Error", description: err?.response?.data?.message || "Something went wrong" });
+      toast({ title: t("common.error"), description: err?.response?.data?.message || t("common.somethingWentWrong") });
     }
   }
 
@@ -229,7 +405,7 @@ const Settings: React.FC = () => {
   return (
     <>
       <Helmet>
-        <title>Setting Page</title>
+        <title>{t("settings.pageTitle")}</title>
         <meta name="description" content="This is the home page of our app" />
       </Helmet>
       <div className="space-y-6 max-w-4xl md:ml-28">
@@ -238,9 +414,9 @@ const Settings: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="w-5 h-5 text-primary" />
-              Profile Information
+              {t("settings.profileTitle")}
             </CardTitle>
-            <CardDescription>Update your personal information</CardDescription>
+            <CardDescription>{t("settings.profileDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center gap-6">
@@ -262,7 +438,7 @@ const Settings: React.FC = () => {
               {/* Change Avatar */}
               <div className="flex flex-col gap-2">
                 {/* <label htmlFor="profileImageInput"> */}
-                <Button type='button' variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>Change Avatar</Button>
+                <Button type='button' variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>{t("common.changeAvatar")}</Button>
                 {/* </label> */}
                 <input
                   type="file"
@@ -282,7 +458,7 @@ const Settings: React.FC = () => {
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  JPG, PNG or GIF. Max size 2MB
+                  {t("common.avatarHint")}
                 </p>
               </div>
             </div>
@@ -292,50 +468,88 @@ const Settings: React.FC = () => {
               {user?.role === "admin" || user?.role === "super_admin" ? (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="username">Full Name</Label>
-                    <Input id="username" value={formData.username} onChange={handleChange} />
+                    <Label htmlFor="username">{t("common.fullName")}</Label>
+                    <Input
+                      id="username"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      autoComplete="name"
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="mobile">Phone</Label>
-                    <Input id="mobile" value={formData.mobile} maxLength={10} onChange={handleChange} />
+                    <Label htmlFor="mobile">{t("common.phone")}</Label>
+                    <Input
+                      id="mobile"
+                      name="mobile"
+                      value={formData.mobile}
+                      maxLength={10}
+                      onChange={handleChange}
+                      autoComplete="tel"
+                    />
                   </div>
                 </>
               ) : (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input id="fullName" value={formData.fullName} onChange={handleChange} />
+                    <Label htmlFor="fullName">{t("common.fullName")}</Label>
+                    <Input
+                      id="fullName"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      autoComplete="name"
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="contact">Phone</Label>
-                    <Input id="contact" value={formData.contact} onChange={handleChange} />
+                    <Label htmlFor="contact">{t("common.phone")}</Label>
+                    <Input
+                      id="contact"
+                      name="contact"
+                      value={formData.contact}
+                      onChange={handleChange}
+                      autoComplete="tel"
+                    />
                   </div>
                 </>
               )}
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t("common.email")}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="email" defaultValue={userData?.email} className="pl-10" disabled />
+                  <Input
+                    id="email"
+                    name="email"
+                    defaultValue={userData?.email}
+                    className="pl-10"
+                    disabled
+                    autoComplete="email"
+                  />
                 </div>
               </div>
 
               {user?.role === "employee" && (
                 <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Input id="department" value={userData?.department?.name || ""} disabled />
+                  <Label htmlFor="department">{t("common.department")}</Label>
+                  <Input
+                    id="department"
+                    name="department"
+                    value={userData?.department?.name || ""}
+                    disabled
+                    autoComplete="organization-title"
+                  />
                 </div>
               )}
             </div>
 
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="w-4 h-4" />
-              <span>Joined: {formatDate(userData?.createdAt)}</span>
+              <span>{t("common.joined")}: {formatDate(userData?.createdAt)}</span>
             </div>
 
             <Button onClick={handleSave}>
               <Save className="w-4 h-4 mr-2" />
-              Save Changes
+              {t("common.save")}
             </Button>
           </CardContent>
         </Card>
@@ -343,9 +557,9 @@ const Settings: React.FC = () => {
         {user?.role !== "super_admin" &&
           <Card>
             <CardHeader>
-              <CardTitle>{user?.role === "admin" ? "Company Information." : "Company & Admin Information."}</CardTitle>
+              <CardTitle>{user?.role === "admin" ? t("settings.companyInfoAdmin") : t("settings.companyInfoEmployee")}</CardTitle>
               <CardDescription>
-                {user?.role === "admin" ? "View our company details." : "View your company and admin details."}
+                {user?.role === "admin" ? t("settings.companyInfoAdminDesc") : t("settings.companyInfoEmployeeDesc")}
               </CardDescription>
             </CardHeader>
 
@@ -356,43 +570,71 @@ const Settings: React.FC = () => {
 
                 {/* Company Name */}
                 <div className="space-y-2">
-                  <Label>Company Name</Label>
+                  <Label htmlFor="companyName">{t("common.companyName")}</Label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.name} disabled className="pl-10" />
+                    <Input
+                      id="companyName"
+                      name="companyName"
+                      value={companyDetail?.name || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="organization"
+                    />
                   </div>
                 </div>
 
                 {/* Company Phone */}
                 <div className="space-y-2">
-                  <Label>Company Phone</Label>
+                  <Label htmlFor="companyPhone">{t("common.companyPhone")}</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.contactNumber} disabled className="pl-10" />
+                    <Input
+                      id="companyPhone"
+                      name="companyPhone"
+                      value={companyDetail?.contactNumber || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="tel"
+                    />
                   </div>
                 </div>
 
                 {/* Company Email */}
                 <div className="space-y-2">
-                  <Label>Company Email</Label>
+                  <Label htmlFor="companyEmail">{t("common.companyEmail")}</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.email} disabled className="pl-10" />
+                    <Input
+                      id="companyEmail"
+                      name="companyEmail"
+                      value={companyDetail?.email || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="email"
+                    />
                   </div>
                 </div>
 
                 {/* Website */}
                 <div className="space-y-2">
-                  <Label>Website Url</Label>
+                  <Label htmlFor="companyWebsite">{t("common.websiteUrl")}</Label>
                   <div className="relative">
                     <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.website} disabled className="pl-10" />
+                    <Input
+                      id="companyWebsite"
+                      name="companyWebsite"
+                      value={companyDetail?.website || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="url"
+                    />
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm text-muted-foreground border-t pt-6">
                   <Calendar className="w-4 h-4" />
-                  <span>CreatedAt :- {formatDate(companyDetail?.createdAt)}</span>
+                  <span>{t("common.createdAt")}: {formatDate(companyDetail?.createdAt)}</span>
                 </div>
 
               </div>
@@ -404,32 +646,53 @@ const Settings: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <User className="w-5 h-5 text-primary" />
-                    <h3 className="text-lg font-semibold">Admin Details</h3>
+                    <h3 className="text-lg font-semibold">{t("common.adminDetails")}</h3>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                     <div className="space-y-2">
-                      <Label>Full Name</Label>
+                      <Label htmlFor="adminFullName">{t("common.fullName")}</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input value={companyDetail?.admins[0]?.username} disabled className="pl-10" />
+                        <Input
+                          id="adminFullName"
+                          name="adminFullName"
+                          value={companyDetail?.admins?.[0]?.username || ""}
+                          disabled
+                          className="pl-10"
+                          autoComplete="name"
+                        />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Admin Phone</Label>
+                      <Label htmlFor="adminPhone">{t("common.adminPhone")}</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input value={companyDetail?.admins[0]?.mobile} disabled className="pl-10" />
+                        <Input
+                          id="adminPhone"
+                          name="adminPhone"
+                          value={companyDetail?.admins?.[0]?.mobile || ""}
+                          disabled
+                          className="pl-10"
+                          autoComplete="tel"
+                        />
                       </div>
                     </div>
 
                     <div className="space-y-2 md:col-span-2">
-                      <Label>Admin Email</Label>
+                      <Label htmlFor="adminEmail">{t("common.adminEmail")}</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input value={userData?.email} disabled className="pl-10" />
+                        <Input
+                          id="adminEmail"
+                          name="adminEmail"
+                          value={userData?.email || ""}
+                          disabled
+                          className="pl-10"
+                          autoComplete="email"
+                        />
                       </div>
                     </div>
                   </div>
@@ -437,7 +700,7 @@ const Settings: React.FC = () => {
                 {/* Joined Info */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground border-t pt-6">
                   <Calendar className="w-4 h-4" />
-                  <span>Joined: {formatDate(userData?.createdAt)}</span>
+                  <span>{t("common.joined")}: {formatDate(userData?.createdAt)}</span>
                 </div>
               </>}
             </CardContent>
@@ -448,47 +711,103 @@ const Settings: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-primary" />
-                Leave Settings
+                {t("settings.leaveTitle")}
               </CardTitle>
-              <CardDescription>Update company leave allocations</CardDescription>
+              <CardDescription>{t("settings.leaveDescription")}</CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-6">
-
-              <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-                {/* Total Leaves */}
-                {/* <div className="space-y-2">
-                  <Label htmlFor="totalLeaves">Total Leaves</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="totalLeaves">{t("settings.totalLeaves")}</Label>
                   <Input
                     id="totalLeaves"
+                    name="totalLeaves"
                     type="number"
                     value={leaves.totalLeave}
                     onChange={(e) => { setLeaves({ ...leaves, totalLeave: e.target.value }) }}
                     min={0}
+                    autoComplete="off"
                   />
-                </div> */}
+                </div>
 
-                {/* Special Leave */}
                 <div className="space-y-2">
-                  <Label htmlFor="specialLeave">Special Leave</Label>
+                  <Label htmlFor="specialLeave">{t("settings.specialLeave")}</Label>
                   <Input
                     id="specialLeave"
+                    name="specialLeave"
                     type="number"
                     value={leaves.specialLeave}
                     onChange={(e) => { setLeaves({ ...leaves, specialLeave: e.target.value }) }}
                     min={0}
+                    autoComplete="off"
                   />
                 </div>
               </div>
 
-              {/* Change Button */}
               <div className="flex justify-start mt-2">
-                <Button onClick={handleUpdateLeave}>
+                <Button onClick={handleUpdateCompanySettings} disabled={savingCompanySettings}>
                   <Save className="w-4 h-4 mr-2" />
-                  Save Changes
+                  {savingCompanySettings ? t("common.saving") : t("settings.saveLeaveSettings")}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <SettingsIcon className="w-5 h-5 text-primary" />
+                {t("settings.attendanceTitle")}
+              </CardTitle>
+              <CardDescription>{t("settings.attendanceDescription")}</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="clockInTime">{t("settings.clockInTime")}</Label>
+                  <Input
+                    id="clockInTime"
+                    name="clockInTime"
+                    type="time"
+                    value={attendanceRules.clockInTime}
+                    onChange={(e) => setAttendanceRules({ ...attendanceRules, clockInTime: e.target.value })}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fullDayHours">{t("settings.fullDayHours")}</Label>
+                  <Input
+                    id="fullDayHours"
+                    name="fullDayHours"
+                    type="number"
+                    min={1}
+                    value={attendanceRules.fullDayHours}
+                    onChange={(e) => setAttendanceRules({ ...attendanceRules, fullDayHours: e.target.value })}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="halfDayHours">{t("settings.halfDayHours")}</Label>
+                  <Input
+                    id="halfDayHours"
+                    name="halfDayHours"
+                    type="number"
+                    min={1}
+                    value={attendanceRules.halfDayHours}
+                    onChange={(e) => setAttendanceRules({ ...attendanceRules, halfDayHours: e.target.value })}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+
+              <Button onClick={handleUpdateCompanySettings} disabled={savingCompanySettings}>
+                <Save className="w-4 h-4 mr-2" />
+                {savingCompanySettings ? t("common.saving") : t("settings.saveAttendanceRules")}
+              </Button>
             </CardContent>
           </Card>
         </>}
@@ -498,42 +817,120 @@ const Settings: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="w-5 h-5 text-primary" />
-              Notifications
+              {t("settings.notificationsTitle")}
             </CardTitle>
-            <CardDescription>Configure how you receive notifications</CardDescription>
+            <CardDescription>{t("settings.notificationsDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Email Notifications</p>
-                <p className="text-sm text-muted-foreground">Receive email for important updates</p>
+                <p className="font-medium">{t("settings.emailNotifications")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.emailNotificationsDesc")}</p>
               </div>
-              <Switch defaultChecked />
+              <Switch
+                checked={preferences.notifications.email}
+                disabled={savingPreferences}
+                onCheckedChange={(checked) => handleNotificationToggle("email", checked)}
+              />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Task Reminders</p>
-                <p className="text-sm text-muted-foreground">Get notified about task deadlines</p>
+                <p className="font-medium">{t("settings.taskReminders")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.taskRemindersDesc")}</p>
               </div>
-              <Switch defaultChecked />
+              <Switch
+                checked={preferences.notifications.tasks}
+                disabled={savingPreferences}
+                onCheckedChange={(checked) => handleNotificationToggle("tasks", checked)}
+              />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Leave Updates</p>
-                <p className="text-sm text-muted-foreground">Notifications for leave request status</p>
+                <p className="font-medium">{t("settings.leaveUpdates")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.leaveUpdatesDesc")}</p>
               </div>
-              <Switch defaultChecked />
+              <Switch
+                checked={preferences.notifications.leave}
+                disabled={savingPreferences}
+                onCheckedChange={(checked) => handleNotificationToggle("leave", checked)}
+              />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Expense Updates</p>
-                <p className="text-sm text-muted-foreground">Get notified when expenses are processed</p>
+                <p className="font-medium">{t("settings.expenseUpdates")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.expenseUpdatesDesc")}</p>
               </div>
-              <Switch />
+              <Switch
+                checked={preferences.notifications.expenses}
+                disabled={savingPreferences}
+                onCheckedChange={(checked) => handleNotificationToggle("expenses", checked)}
+              />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Monitor className="w-5 h-5 text-primary" />
+              {t("settings.sessionsTitle")}
+            </CardTitle>
+            <CardDescription>{t("settings.sessionsDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {sessionsLoading ? (
+              <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+            ) : sessions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("settings.sessionsEmpty")}</p>
+            ) : (
+              <div className="space-y-3">
+                {sessions.map((session) => (
+                  <div
+                    key={session.sessionId}
+                    className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{session.deviceLabel}</p>
+                        {session.current ? (
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                            {t("settings.sessionsCurrent")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {t("settings.sessionsLastActive")}: {formatDate(session.lastActiveAt)}
+                      </p>
+                      {session.ipAddress ? (
+                        <p className="text-sm text-muted-foreground">
+                          {t("settings.sessionsIp")}: {session.ipAddress}
+                        </p>
+                      ) : null}
+                    </div>
+                    {!session.current ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={sessionsActionId === session.sessionId}
+                        onClick={() => handleRevokeSession(session.sessionId)}
+                      >
+                        {t("settings.sessionsRevoke")}
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              variant="outline"
+              disabled={sessionsLoading || sessionsActionId === "others" || sessions.length <= 1}
+              onClick={handleRevokeOtherSessions}
+            >
+              {t("settings.sessionsRevokeOthers")}
+            </Button>
           </CardContent>
         </Card>
 
@@ -542,24 +939,26 @@ const Settings: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Lock className="w-5 h-5 text-primary" />
-              Security
+              {t("settings.securityTitle")}
             </CardTitle>
-            <CardDescription>Manage your account security</CardDescription>
+            <CardDescription>{t("settings.securityDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* New Password */}
               <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
+                <Label htmlFor="new-password">{t("common.newPassword")}</Label>
 
                 <div className="relative">
                   <Input
                     id="new-password"
+                    name="new-password"
                     value={newPassword}
                     type={newPasswordShow ? "text" : "password"}
                     placeholder="••••••••"
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="pr-10"
+                    autoComplete="new-password"
                   />
 
                   <button
@@ -574,16 +973,18 @@ const Settings: React.FC = () => {
 
               {/* Confirm Password */}
               <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Label htmlFor="confirm-password">{t("common.confirmPassword")}</Label>
 
                 <div className="relative">
                   <Input
                     id="confirm-password"
+                    name="confirm-password"
                     value={confirmPassword}
                     type={confirmPasswordShow ? "text" : "password"}
                     placeholder="••••••••"
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="pr-10"
+                    autoComplete="new-password"
                   />
 
                   <button
@@ -597,7 +998,7 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <Button variant="outline" disabled={!newPassword || !confirmPassword} onClick={handleUpdatePassword}>Update Password</Button>
+            <Button variant="outline" disabled={!newPassword || !confirmPassword} onClick={handleUpdatePassword}>{t("common.updatePassword")}</Button>
           </CardContent>
         </Card>
 
@@ -606,33 +1007,46 @@ const Settings: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="w-5 h-5 text-primary" />
-              Preferences
+              {t("settings.preferencesTitle")}
             </CardTitle>
-            <CardDescription>Customize your experience</CardDescription>
+            <CardDescription>{t("settings.preferencesDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 mb-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Globe className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Language</p>
-                  <p className="text-sm text-muted-foreground">Select your preferred language</p>
-                </div>
+                <Label htmlFor="languageSelect" className="flex flex-col cursor-default">
+                  <span className="font-medium">{t("settings.language")}</span>
+                  <span className="text-sm text-muted-foreground">{t("settings.languageDesc")}</span>
+                </Label>
               </div>
-              <select className="px-3 py-2 rounded-md border bg-background">
-                <option>English</option>
-                <option>Spanish</option>
-                <option>French</option>
-                <option>German</option>
+              <select
+                id="languageSelect"
+                name="language"
+                className="px-3 py-2 rounded-md border bg-background"
+                value={preferences.language}
+                disabled={savingPreferences}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                autoComplete="language"
+              >
+                {languageOptions.map((code) => (
+                  <option key={code} value={code}>
+                    {t(`languages.${code}`)}
+                  </option>
+                ))}
               </select>
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Compact View</p>
-                <p className="text-sm text-muted-foreground">Show more content with less spacing</p>
+                <p className="font-medium">{t("settings.compactView")}</p>
+                <p className="text-sm text-muted-foreground">{t("settings.compactViewDesc")}</p>
               </div>
-              <Switch />
+              <Switch
+                checked={preferences.compactView}
+                disabled={savingPreferences}
+                onCheckedChange={handleCompactViewChange}
+              />
             </div>
           </CardContent>
         </Card>

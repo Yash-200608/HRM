@@ -2,6 +2,8 @@ const Lead = require("../../models/lead-portal/lead");
 const Payment = require("../../models/lead-portal/Payment");
 const {createLead} = require("../../service/leadService");
 
+const resolveRequestId = (req) => req.params.id || req.query.id || req.body.id;
+
 const addLead = async (req, res) => {
    const result = await createLead(req.body);
 
@@ -57,7 +59,15 @@ const getLeads = async (req, res) => {
  */
 const getLeadById = async (req, res) => {
     try {
-        const lead = await Lead.findById(req.params.id).populate("productId");
+        const id = resolveRequestId(req);
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Lead id is required",
+            });
+        }
+
+        const lead = await Lead.findById(id).populate("productId");
 
         if (!lead) {
             return res.status(404).json({

@@ -16,6 +16,7 @@ const { access, mutation } = createPortalGuards("leadportal");
 router.post("/add", mutation, access, addLead);
 router.get("/get", access, getLeads);
 router.get("/getbyid/:id", access, getLeadById);
+router.get("/getbyid", access, getLeadById);
 router.put("/update/:id", mutation, access, updateLead);
 router.delete("/delete/:id", mutation, access, deleteLead);
 router.patch("/status", mutation, access, updateLeadStatus);

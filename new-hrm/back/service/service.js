@@ -6,12 +6,18 @@ const generateAccessToken = (data, options = {}) => {
   const claims = buildJwtClaimsV1(data);
 
   return jwt.sign(claims, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: options.expiresIn || "1d",
+    expiresIn: options.expiresIn || process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
   });
 };
 
 const generateRefreshToken = (data) => {
-  return jwt.sign({ id: data.id }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
+  const payload = {
+    id: String(data.id),
+    sessionId: data.sessionId ? String(data.sessionId) : null,
+    jti: data.jti || require("crypto").randomUUID(),
+  };
+
+  return jwt.sign(payload, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
 };
 
 module.exports = { generateAccessToken, generateRefreshToken };

@@ -1,8 +1,13 @@
 const { SuperAdmin } = require("../../models/personalOffice/superadminModel");
 const bcrypt = require("bcrypt");
-const { generateAccessToken, generateRefreshToken } = require("../../service/service.js");
-const { buildAccessTokenInput } = require("../../service/tokenClaimsService.js");
-const { shouldRequireMfa, buildMfaLoginChallenge } = require("../../service/mfaService.js");
+
+const {
+  assessMfaAtLogin,
+  buildMfaEnrollmentChallenge,
+  buildMfaLoginChallenge,
+} = require("../../service/mfaService.js");
+const { issueAuthenticatedSession } = require("../../service/authLoginService.js");
+const { recordLoginFailure } = require("../../service/securityAuditService.js");
 
 const registerSuperAdmin = async (req, res) => {
   try {
@@ -57,18 +62,29 @@ const loginSuperAdmin = async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const user = await SuperAdmin.findOne({ email }).select("+password +mfaSecret");
+    const user = await SuperAdmin.findOne({ email }).select("+password +mfaSecret +mfaPendingSecret");
 
     if (!user) {
+      await recordLoginFailure(req, { email, reason: "invalid_email", accountType: "super_admin" });
       return res.status(400).json({ message: "Invalid email" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      await recordLoginFailure(req, { email, reason: "invalid_password", accountType: "super_admin" });
       return res.status(400).json({ message: "Invalid password" });
     }
 
-    if (shouldRequireMfa(user)) {
+    const mfaState = assessMfaAtLogin(user);
+    if (mfaState.status === "enrollment_required") {
+      const enrollment = await buildMfaEnrollmentChallenge(user);
+      return res.status(200).json({
+        message: "MFA enrollment required",
+        ...enrollment,
+      });
+    }
+
+    if (mfaState.status === "challenge_required") {
       const challenge = await buildMfaLoginChallenge(user);
       return res.status(200).json({
         message: "MFA verification required",
@@ -76,30 +92,17 @@ const loginSuperAdmin = async (req, res) => {
       });
     }
 
-    const accessToken = generateAccessToken(
-      await buildAccessTokenInput(user, { accountType: "super_admin" })
-    );
-    const refreshToken = generateRefreshToken({ id: user._id });
-
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
+    const session = await issueAuthenticatedSession(req, res, user, {
+      accountType: "super_admin",
     });
-
-    const userData = user.toObject();
-    delete userData.password;
 
     return res.status(200).json({
       message: "Login successful",
-      accessToken,
+      accessToken: session.accessToken,
       user: {
-        ...userData,
+        ...session.userData,
         role: user?.role,
-        fullName: userData.username,
+        fullName: session.userData.username,
       },
     });
   } catch (err) {

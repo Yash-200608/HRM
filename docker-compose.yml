@@ -1,0 +1,25 @@
+# Local development stack (no paid API keys required).
+# Apps still run via npm — this file starts shared infrastructure only.
+#
+#   docker compose up -d
+#   cd Subscription && npm run dev
+#   cd new-hrm/back && npm run dev
+#   cd new-hrm/frontend && npm run dev
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: hrm-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - hrm_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hrm_mongo_data:

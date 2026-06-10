@@ -1,0 +1,391 @@
+{
+  "common": {
+    "save": "Save Changes",
+    "saving": "Saving...",
+    "error": "Error",
+    "success": "Success",
+    "loading": "Loading...",
+    "joined": "Joined",
+    "email": "Email",
+    "phone": "Phone",
+    "fullName": "Full Name",
+    "logout": "Logout",
+    "profile": "Profile",
+    "settings": "Settings",
+    "myAccount": "My Account",
+    "changeAvatar": "Change Avatar",
+    "avatarHint": "JPG, PNG or GIF. Max size 2MB",
+    "department": "Department",
+    "companyName": "Company Name",
+    "companyPhone": "Company Phone",
+    "companyEmail": "Company Email",
+    "websiteUrl": "Website Url",
+    "createdAt": "CreatedAt",
+    "adminDetails": "Admin Details",
+    "adminPhone": "Admin Phone",
+    "adminEmail": "Admin Email",
+    "updatePassword": "Update Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "somethingWentWrong": "Something went wrong",
+    "fillAllFields": "Please fill all the fields",
+    "download": "Download",
+    "edit": "Edit"
+  },
+  "languages": {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "companies": "Companies",
+    "admins": "Admins",
+    "employees": "Employees",
+    "tasks": "Tasks",
+    "attendance": "Attendance",
+    "attendancereport": "Monthly Attendance",
+    "leave": "Leave",
+    "departments": "Departments",
+    "Resignation": "Resignation",
+    "holiday": "Holidays",
+    "expenses": "Expenses",
+    "payroll": "Payroll",
+    "jobportal": "Job Portal",
+    "leadportal": "Lead Portal",
+    "reports": "Reports",
+    "performance": "Performance",
+    "my-performance": "My Performance",
+    "assets": "Assets",
+    "learning": "Learning",
+    "billing": "Billing",
+    "platform_revenue": "Platform Revenue",
+    "platform_ops": "Platform Ops",
+    "roles": "Roles",
+    "security": "Security",
+    "setting": "Settings",
+    "tasks_dashboard": "Dashboard",
+    "projects": "Projects",
+    "subtasks": "Sub Tasks",
+    "overdue_tasks": "Overdue Tasks",
+    "task_manager": "Task Manager",
+    "job_dashboard": "Dashboard",
+    "job_companies": "Companies",
+    "jobs": "Jobs",
+    "job_applications": "Applications",
+    "job_candidates": "Candidates",
+    "job_revenue": "Revenue",
+    "job_settings": "Settings",
+    "job_roles": "Roles",
+    "lead_list": "Lead List",
+    "lead_orders": "Join List",
+    "lead_products": "Course List"
+  },
+  "roles": {
+    "superAdmin": "Super Admin",
+    "admin": "Admin",
+    "departmentManager": "Department Manager ({{department}})",
+    "employee": "Employee ({{department}})"
+  },
+  "settings": {
+    "pageTitle": "Settings",
+    "profileTitle": "Profile Information",
+    "profileDescription": "Update your personal information",
+    "profileSaved": "Profile updated successfully",
+    "companyInfoAdmin": "Company Information",
+    "companyInfoEmployee": "Company & Admin Information",
+    "companyInfoAdminDesc": "View our company details.",
+    "companyInfoEmployeeDesc": "View your company and admin details.",
+    "leaveTitle": "Leave Settings",
+    "leaveDescription": "Update company leave allocations",
+    "totalLeaves": "Total Leaves",
+    "specialLeave": "Special Leave",
+    "saveLeaveSettings": "Save Leave Settings",
+    "attendanceTitle": "Attendance Rules",
+    "attendanceDescription": "Configure default attendance expectations",
+    "clockInTime": "Expected Clock-in",
+    "fullDayHours": "Full Day Hours",
+    "halfDayHours": "Half Day Hours",
+    "saveAttendanceRules": "Save Attendance Rules",
+    "notificationsTitle": "Notifications",
+    "notificationsDescription": "Configure how you receive notifications",
+    "emailNotifications": "Email Notifications",
+    "emailNotificationsDesc": "Receive email for important updates",
+    "taskReminders": "Task Reminders",
+    "taskRemindersDesc": "Get notified about task deadlines",
+    "leaveUpdates": "Leave Updates",
+    "leaveUpdatesDesc": "Notifications for leave request status",
+    "expenseUpdates": "Expense Updates",
+    "expenseUpdatesDesc": "Get notified when expenses are processed",
+    "preferencesTitle": "Preferences",
+    "preferencesDescription": "Customize your experience",
+    "language": "Language",
+    "languageDesc": "Select your preferred language",
+    "compactView": "Compact View",
+    "compactViewDesc": "Show more content with less spacing",
+    "securityTitle": "Security",
+    "securityDescription": "Manage your account security",
+    "sessionsTitle": "Active Sessions",
+    "sessionsDescription": "Review signed-in devices and revoke access you do not recognize.",
+    "sessionsCurrent": "This device",
+    "sessionsLastActive": "Last active",
+    "sessionsIp": "IP address",
+    "sessionsRevoke": "Revoke",
+    "sessionsRevokeOthers": "Sign out other devices",
+    "sessionsRevoked": "Session revoked",
+    "sessionsOthersRevoked": "Other sessions signed out",
+    "sessionsLoadFailed": "Could not load active sessions",
+    "sessionsEmpty": "No active sessions found",
+    "companySettingsUpdated": "Company settings updated",
+    "languageUpdatedTitle": "Language updated",
+    "languageUpdatedDesc": "Your language is now {{language}}.",
+    "compactOnTitle": "Compact view updated",
+    "compactOnDesc": "Compact view is now enabled across the app.",
+    "compactOffTitle": "Compact view updated",
+    "compactOffDesc": "Compact view has been turned off.",
+    "notificationSavedTitle": "Notification preference saved",
+    "notificationSavedDesc": "Your notification setting was updated successfully.",
+    "preferencesError": "Could not save your preferences. Please try again.",
+    "passwordRequired": "Password and confirm password are required.",
+    "passwordMismatch": "Your passwords did not match.",
+    "passwordChanged": "Password changed",
+    "companyIdMissing": "Company Id Not Found."
+  },
+  "headings": {
+    "dashboard": {
+      "title": "Admin Dashboard",
+      "description": "Welcome back! Here's what's happening today."
+    },
+    "superAdminDashboard": {
+      "title": "Platform Dashboard",
+      "description": "Monitor tenants, admins, and platform-wide activity."
+    },
+    "attendance": {
+      "title": "Attendance",
+      "descriptionAdmin": "Overview of all employees' attendance.",
+      "descriptionEmployee": "Your daily attendance record."
+    },
+    "leave": {
+      "title": "Leave Management",
+      "descriptionAdmin": "Manage employee leave requests and types.",
+      "descriptionEmployee": "Apply for leave and track your requests."
+    },
+    "departments": {
+      "title": "Departments",
+      "description": "Manage company departments and team structure."
+    },
+    "usersAdmin": {
+      "title": "Manage Admins",
+      "description": "Create and manage admin accounts."
+    },
+    "usersEmployee": {
+      "title": "Manage Employees",
+      "description": "Create and manage employee accounts."
+    },
+    "expenses": {
+      "title": "Expenses",
+      "description": "View and manage your expenses."
+    },
+    "payroll": {
+      "title": "Payroll Management",
+      "description": "Manage employee salaries and generate payslips."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "View recent alerts, updates, and system messages."
+    },
+    "reports": {
+      "title": "Reports & Analytics",
+      "description": "Comprehensive insights into your organization's performance."
+    },
+    "setting": {
+      "title": "Settings",
+      "description": "Manage your account settings and preferences."
+    },
+    "companies": {
+      "title": "Companies",
+      "description": "Manage your company's profile, settings, and overall structure."
+    },
+    "tasks": {
+      "title": "Tasks",
+      "description": "Overview of your projects and tasks."
+    },
+    "tasksDashboard": {
+      "title": "Dashboard",
+      "description": "Overview of your projects and tasks."
+    },
+    "tasksProjects": {
+      "title": "Projects",
+      "description": "Manage and track your ongoing projects."
+    },
+    "tasksTask": {
+      "title": "Tasks",
+      "description": "Manage and track your ongoing tasks."
+    },
+    "tasksSubTask": {
+      "title": "Sub Tasks",
+      "description": "Manage and track your ongoing sub tasks."
+    },
+    "tasksOverdue": {
+      "title": "Overdue Tasks",
+      "description": "Manage and track your overdue tasks."
+    },
+    "tasksManager": {
+      "title": "Task Manager",
+      "description": "Manage and track your department managers."
+    },
+    "jobsDashboard": {
+      "title": "Dashboard",
+      "description": "Overview of recruitment performance, activity, and hiring metrics."
+    },
+    "jobsCandidates": {
+      "title": "Candidates",
+      "description": "View, manage, and organize candidate profiles."
+    },
+    "jobsApplications": {
+      "title": "Applications",
+      "description": "Track and manage job applications across all stages."
+    },
+    "jobsCompanies": {
+      "title": "Companies",
+      "description": "Manage registered companies and their job postings."
+    },
+    "jobsJobs": {
+      "title": "Jobs",
+      "description": "Create and manage job posts, candidates, and metrics."
+    },
+    "jobsRevenue": {
+      "title": "Revenue",
+      "description": "Analyze earnings and recruitment revenue streams."
+    },
+    "jobsSetting": {
+      "title": "Settings",
+      "description": "Configure portal preferences and system configurations."
+    },
+    "jobsRoles": {
+      "title": "Roles",
+      "description": "Manage roles."
+    },
+    "jobsPortal": {
+      "title": "Job Portal",
+      "description": "Overview of recruitment performance and hiring metrics."
+    },
+    "leadsList": {
+      "title": "Student Lead Management",
+      "description": "Manage and track your potential students efficiently."
+    },
+    "leadsOrders": {
+      "title": "Enrolled Join List",
+      "description": "Manage enrollments, payments, and student joins."
+    },
+    "leadsProducts": {
+      "title": "Course Management",
+      "description": "Manage and track your courses efficiently."
+    },
+    "leadsPortal": {
+      "title": "Lead Portal",
+      "description": "Manage and track your leads and products."
+    }
+  },
+  "login": {
+    "pageTitle": "Employee Login",
+    "metaDescription": "Employee login page for Xntrova HRMS",
+    "brandName": "Xntrova HRMS",
+    "brandTagline": "Enterprise Workforce Platform",
+    "heroBadge": "Workforce Management Intelligence",
+    "heroTitle": "Work smarter with centralized HR operations.",
+    "heroDescription": "Attendance, payroll, leaves, employees, analytics and operational workflows — unified in one intelligent workspace.",
+    "statCompanies": "Companies",
+    "statEmployees": "Employees",
+    "statProductivity": "Productivity",
+    "welcomeBack": "Welcome Back",
+    "subtitle": "Login to access your HRMS workspace and daily operations.",
+    "emailAddress": "Email Address",
+    "emailPlaceholder": "Enter your email",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "signingIn": "Signing In...",
+    "accessWorkspace": "Access Workspace",
+    "secureAuth": "Secure enterprise authentication",
+    "version": "HRMS v2.0",
+    "copyright": "© 2026 Xntrova Technologies. All rights reserved.",
+    "loginSuccess": "Login Successful",
+    "welcomeBackToast": "Welcome back!",
+    "loginFailed": "Login Failed",
+    "employee": "Employee",
+    "admin": "Admin",
+    "superAdmin": "Super Admin"
+  },
+  "users": {
+    "pageTitleAdmin": "Admin Page",
+    "pageTitleEmployee": "Employee Page",
+    "searchAdmins": "Search admins...",
+    "searchEmployees": "Search employees...",
+    "active": "Active",
+    "relieve": "Relieve",
+    "relieved": "Relieved",
+    "onHold": "On Hold",
+    "addAdmin": "Add Admin",
+    "addEmployee": "Add Employee",
+    "addManager": "Add Manager",
+    "makeActive": "Make Active",
+    "assignRole": "Assign Role",
+    "noRole": "No Role",
+    "offerLetter": "Offer Letter",
+    "joinLetter": "Join Letter",
+    "noc": "NOC",
+    "recommendation": "Recommendation",
+    "relievingLetter": "Relieving Letter",
+    "joined": "Joined {{date}}",
+    "deleteAdminTitle": "Delete Admin?",
+    "deleteAdminMessage": "This action will permanently soft-delete or inactivate this admin.",
+    "roleUpdated": "Role updated",
+    "roleUpdatedDesc": "Employee role updated successfully.",
+    "failedAssignRole": "Failed to assign role",
+    "failedLoadRoles": "Failed to load roles",
+    "employeeStatusActive": "Employee status activated successfully.",
+    "errorEmployeeStatus": "Error updating employee status.",
+    "companyIdMissing": "Company Id Not Found.",
+    "userIdMissing": "User Id Not Found.",
+    "deleteAdmin": "Delete Admin",
+    "adminStatus": "Admin status updated",
+    "previewNotAvailable": "Preview not available",
+    "documentNotExist": "This document does not exist.",
+    "failedLoadDocument": "Failed to load document",
+    "noUsersFound": "No users found matching your search."
+  },
+  "superAdminDashboard": {
+    "badge": "Platform Intelligence",
+    "welcome": "Welcome back,",
+    "subtitle": "Oversee all tenant companies, admins, workforce scale, and platform operations from one control center.",
+    "today": "Today's Date",
+    "platformStatus": "Platform Status",
+    "operational": "Operational",
+    "growth": "Tenant Health",
+    "growthDesc": "{{count}} active companies on the platform",
+    "totalCompanies": "Total Companies",
+    "activeTenants": "Active Tenants",
+    "totalEmployees": "Total Employees",
+    "totalProjects": "Total Projects",
+    "quickActions": "Quick Actions",
+    "manageCompanies": "Manage Companies",
+    "manageAdmins": "Manage Admins",
+    "platformRevenue": "Platform Revenue",
+    "platformOps": "Platform Ops",
+    "companiesOverview": "Companies Overview",
+    "viewAll": "View all",
+    "noCompanies": "No companies onboarded yet.",
+    "recentActivity": "Recent Activity",
+    "noActivity": "No recent platform activity.",
+    "adminLabel": "Admin",
+    "noAdmin": "No Admin",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "notFound": {
+    "title": "404",
+    "message": "Oops! Page not found",
+    "returnHome": "Return to Home"
+  }
+}

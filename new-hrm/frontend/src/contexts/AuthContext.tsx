@@ -2,7 +2,8 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, UserRole } from '@/types';
 import { useToast } from "@/hooks/use-toast";
-import { getBillingOverview, loginEmployee, logoutSession } from "@/services/Service";
+import { getBillingOverview, loginEmployee, logoutSession, validateSession } from "@/services/Service";
+import { clearLocalSession, getLoginPathForRole } from "@/lib/session";
 import { applyEntitlementsToStoredUser } from "@/lib/entitlements";
 import { useAppDispatch, useAppSelector } from '@/redux-toolkit/hooks/hook';
 import { getCompany, getRecentActivities } from '@/redux-toolkit/slice/allPage/companySlice';
@@ -32,26 +33,30 @@ import { getRoles } from "@/redux-toolkit/slice/job-portal/roleSlice";
 import { getLoginUser } from "@/redux-toolkit/slice/allPage/loginUserSlice";
 import { socket } from "@/socket/socket";
 import { useNavigate } from 'react-router-dom';
-import { jwtDecode } from "jwt-decode";
 import { readEntitlementsFromAccessToken } from "@/lib/entitlements";
+
+interface LoginResult {
+  accessToken?: string;
+  user?: User;
+  message?: string;
+}
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, role?: UserRole) => Promise<void>; // role optional
+  login: (email: string, password: string, role?: UserRole) => Promise<LoginResult | void>;
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
+  initializing: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const dispatch = useAppDispatch();
   const loginUserData = useAppSelector((state) => state?.loginUser?.loginUser);
   const navigate = useNavigate();
@@ -236,9 +241,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (res.status === 200) {
       const loginUser = res?.data?.user;
-      const token = res?.data?.accessToken;
-
-      localStorage.setItem("accessToken", token);
+      localStorage.removeItem("accessToken");
       localStorage.setItem("user", JSON.stringify(loginUser));
 
       setUser(loginUser);
@@ -248,6 +251,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         title: "Login Successfully.",
         description: res?.data?.message,
       });
+
+      return {
+        user: loginUser,
+        message: res?.data?.message,
+      };
     }
   } catch (error: any) {
     toast({
@@ -258,62 +266,97 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         "Something went wrong",
       variant: "destructive",
     });
+    throw error;
   } finally {
     setLoading(false);
   }
 };
 
   useEffect(() => {
-  const token = localStorage.getItem("accessToken");
-  const savedUser = localStorage.getItem("user");
+    let cancelled = false;
 
-  if (token && savedUser && !user) {
-    setUser(JSON.parse(savedUser));
-  }
-}, []);
+    const finishInitialization = () => {
+      if (!cancelled) {
+        setInitializing(false);
+      }
+    };
 
+    const bootstrapSession = async () => {
+      try {
+        const res = await validateSession();
 
-useEffect(() => {
+        if (cancelled) {
+          return;
+        }
 
-  const token = localStorage.getItem("accessToken");
+        if (res.status === 200 && res.data?.user) {
+          const sessionUser = res.data.user as User;
+          setUser(sessionUser);
+          dispatch(getLoginUser(sessionUser));
+          localStorage.setItem("user", JSON.stringify(sessionUser));
+        } else {
+          clearLocalSession();
+          setUser(null);
+          dispatch(getLoginUser(null));
+        }
+      } catch {
+        if (!cancelled) {
+          clearLocalSession();
+          setUser(null);
+          dispatch(getLoginUser(null));
+        }
+      } finally {
+        finishInitialization();
+      }
+    };
 
-  if (!token) return;
+    bootstrapSession();
 
-  try {
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch]);
 
-    const decoded: any = jwtDecode(token);
-
-    const currentTime = Date.now() / 1000;
-
-    // TOKEN EXPIRED
-    if (decoded.exp < currentTime) {
-
-      logout();
-
+  useEffect(() => {
+    if (!user) {
       return;
     }
 
-    // AUTO LOGOUT TIMER
-    const remainingTime =
-      decoded.exp * 1000 - Date.now();
+    const refreshSession = async () => {
+      try {
+        const res = await validateSession();
+        if (res.status !== 200 || !res.data?.user) {
+          throw new Error("Session expired");
+        }
+      } catch {
+        const loginPath = getLoginPathForRole(user?.role);
+        clearLocalSession();
+        setUser(null);
+        dispatch(getLoginUser(null));
+        window.location.href = loginPath;
+      }
+    };
 
-    const timer = setTimeout(() => {
-
-      logout();
-
-    }, remainingTime);
-
-    return () => clearTimeout(timer);
-
-  } catch (error) {
-
-    logout();
-  }
-
-}, []);
+    const interval = window.setInterval(refreshSession, 5 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [user?._id, user?.role, dispatch]);
 
   useEffect(() => {
-    if (!user || user.role === "super_admin") {
+    const handleStorageSync = (event: StorageEvent) => {
+      if (event.key === "user" && event.oldValue && !event.newValue) {
+        setUser(null);
+        dispatch(getLoginUser(null));
+        clearLocalSession();
+        window.location.href = getLoginPathForRole();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageSync);
+    return () => window.removeEventListener("storage", handleStorageSync);
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!user || user.role !== "admin") {
       return;
     }
 
@@ -353,28 +396,47 @@ useEffect(() => {
     };
   }, [user?._id, user?.role, dispatch]);
 
+  useEffect(() => {
+    if (!user || user.role !== "admin") {
+      return;
+    }
+
+    const refreshEntitlements = () => {
+      getBillingOverview()
+        .then((response) => {
+          const data = response?.data?.data ?? response?.data;
+          if (!Array.isArray(data?.entitlements)) {
+            return;
+          }
+
+          const updated = applyEntitlementsToStoredUser(
+            data.entitlements,
+            data.subscriptionPlan
+          );
+
+          if (updated) {
+            setUser(updated);
+            dispatch(getLoginUser(updated));
+          }
+        })
+        .catch(() => undefined);
+    };
+
+    window.addEventListener("focus", refreshEntitlements);
+    return () => window.removeEventListener("focus", refreshEntitlements);
+  }, [user?._id, user?.role, dispatch]);
+
 
   const logout = () => {
+    const loginPath = getLoginPathForRole(user?.role);
     void logoutSession().catch(() => undefined);
 
-    if (user?.role === "super_admin") {
-      navigate("/superAdmin/login");
-    }
-    else if (user?.role === "admin") {
-      navigate("/admin/login");
-    }
-    else {
-      navigate("/login");
-    }
     toast({
       title: "Logout Successfully.",
       description: `Logout Successfully.`,
     });
     setUser(null);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('user');
-    localStorage.removeItem("token");
-    sessionStorage.clear();
+    clearLocalSession();
     dispatch(getCompany([]));
     dispatch(getRecentActivities([]));
     dispatch(getSetting(null));
@@ -411,10 +473,11 @@ useEffect(() => {
     dispatch(getDashboardSummaryData(null));
     dispatch(getDashboardOverviewData(null));
     dispatch(getDashboardPanelData(null));
+    navigate(loginPath);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading, initializing }}>
       {children}
     </AuthContext.Provider>
   );

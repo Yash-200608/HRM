@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { confirmPasswordReset } from "@/services/Service";
 
 const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const token = useMemo(() => searchParams.get("token") || "", [searchParams]);
   const { toast } = useToast();
   const [password, setPassword] = useState("");
@@ -36,6 +37,7 @@ const ResetPassword: React.FC = () => {
         title: "Password updated",
         description: "You can now sign in with your new password.",
       });
+      navigate("/login", { replace: true });
     } catch (error: any) {
       toast({
         title: "Reset failed",

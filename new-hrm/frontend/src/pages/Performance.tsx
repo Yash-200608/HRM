@@ -321,7 +321,7 @@ const Performance: React.FC = () => {
                           Submit
                         </Button>
                       )}
-                      {review.status === "SUBMITTED" && (
+                      {review.status === "SUBMITTED" && user?.role === "employee" && (
                         <Button size="sm" variant="outline" onClick={() => handleAcknowledge(review._id)}>
                           Acknowledge
                         </Button>

@@ -14,6 +14,7 @@ import {loginSuperAdmin} from "@/services/Service";
 import {getLoginUser} from "@/redux-toolkit/slice/allPage/loginUserSlice";
 import OAuthButtons from "@/components/auth/OAuthButtons";
 import MfaLoginChallenge from "@/components/auth/MfaLoginChallenge";
+import MfaEnrollmentChallenge from "@/components/auth/MfaEnrollmentChallenge";
 import { Link } from "react-router-dom";
 
  
@@ -30,6 +31,10 @@ const SuperAdminLogin: React.FC = () => {
     mfaChallengeToken: string;
     email?: string;
   } | null>(null);
+  const [mfaEnrollment, setMfaEnrollment] = useState<{
+    mfaEnrollmentToken: string;
+    email?: string;
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,11 +49,20 @@ const SuperAdminLogin: React.FC = () => {
        setIsLoading(true);
     try {
       const res = await loginSuperAdmin(email, password);
+      if (res.status === 200 && res?.data?.mfaEnrollmentRequired) {
+        setMfaEnrollment({
+          mfaEnrollmentToken: res.data.mfaEnrollmentToken,
+          email: res.data.email,
+        });
+        setMfaChallenge(null);
+        return;
+      }
       if (res.status === 200 && res?.data?.mfaRequired) {
         setMfaChallenge({
           mfaChallengeToken: res.data.mfaChallengeToken,
           email: res.data.email,
         });
+        setMfaEnrollment(null);
         return;
       }
       if (res.status === 200) {
@@ -56,7 +70,7 @@ const SuperAdminLogin: React.FC = () => {
                 title: "Login Successfully.",
                 description: `${res?.data?.message}`,
               });
-              localStorage.setItem('accessToken', res?.data?.accessToken);
+              localStorage.removeItem('accessToken');
               localStorage.setItem('user', JSON.stringify(res?.data?.user));
               dispatch(getLoginUser(res?.data?.user))
               navigate("/dashboard");
@@ -217,14 +231,30 @@ const SuperAdminLogin: React.FC = () => {
 
             </div>
 
-            {mfaChallenge ? (
+            {mfaEnrollment ? (
+              <MfaEnrollmentChallenge
+                mfaEnrollmentToken={mfaEnrollment.mfaEnrollmentToken}
+                email={mfaEnrollment.email}
+                onCancel={() => setMfaEnrollment(null)}
+                onSuccess={({ user }) => {
+                  toast({
+                    title: "MFA enabled",
+                    description: "Your account is secured. Save your recovery codes before continuing.",
+                  });
+                  localStorage.removeItem("accessToken");
+                  localStorage.setItem("user", JSON.stringify(user));
+                  dispatch(getLoginUser(user));
+                  navigate("/dashboard");
+                }}
+              />
+            ) : mfaChallenge ? (
               <MfaLoginChallenge
                 mfaChallengeToken={mfaChallenge.mfaChallengeToken}
                 email={mfaChallenge.email}
                 onCancel={() => setMfaChallenge(null)}
-                onSuccess={({ accessToken, user }) => {
+                onSuccess={({ user }) => {
                   toast({ title: "Login successful" });
-                  localStorage.setItem("accessToken", accessToken);
+                  localStorage.removeItem("accessToken");
                   localStorage.setItem("user", JSON.stringify(user));
                   dispatch(getLoginUser(user));
                   navigate("/dashboard");

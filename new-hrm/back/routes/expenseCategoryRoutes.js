@@ -1,5 +1,11 @@
 const express = require("express");
 const router = express.Router();
+const authMiddleware = require("../middleware/authMiddleware.js");
+const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
+
+router.use(authMiddleware);
+router.use(enforceModuleAccess("expenses"));
+
 const {
   addExpenseCategory,
   getExpenseCategories,

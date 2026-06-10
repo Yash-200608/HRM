@@ -5,6 +5,8 @@
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { attachCsrfHeader, captureCsrfTokenFromResponse } from "@/lib/csrf";
+import { handleUnauthorized } from "@/lib/session";
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL;
 axios.defaults.withCredentials = true;
@@ -35,16 +37,24 @@ if (!(window as any).__axiosInterceptorAdded) {
         config.headers.Authorization = `Bearer ${token}`;
       }
 
+      config.headers = attachCsrfHeader(
+        config.headers as Record<string, unknown>,
+        config.method,
+      ) as typeof config.headers;
+
       return config;
     },
     (error) => Promise.reject(error),
   );
 
   axios.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      captureCsrfTokenFromResponse(response.headers as Record<string, unknown>);
+      return response;
+    },
     (error) => {
-      if (error?.response?.status === 401) {
-        console.log("Unauthorized request ❌");
+      if (error?.response?.status === 401 && !error?.config?.skipAuthRedirect) {
+        handleUnauthorized();
       }
       return Promise.reject(error);
     },
@@ -54,6 +64,34 @@ if (!(window as any).__axiosInterceptorAdded) {
 }
 
 const token = localStorage.getItem("accessToken");
+
+const getRequestId = (value: any): string | undefined => {
+  if (typeof value === "string") return value;
+  return value?.params?.id || value?.id || value?._id;
+};
+
+const getConfigWithoutId = (value: any) => {
+  if (!value || typeof value !== "object") return undefined;
+
+  const config = { ...value };
+  delete config.id;
+  delete config._id;
+
+  if (config.params) {
+    const { id, _id, ...params } = config.params;
+    config.params = params;
+  }
+
+  return config;
+};
+
+const getRequiredRequestId = (value: any, label: string) => {
+  const id = getRequestId(value);
+  if (!id) {
+    throw new Error(`${label} id is required`);
+  }
+  return id;
+};
 
 export const generatePDF = (expenses) => {
   const doc = new jsPDF();
@@ -220,6 +258,31 @@ export const loginAdmin = async (email, password) => {
 export const logoutSession = async () => {
   const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/logout`);
 
+  return res;
+};
+
+export const validateSession = async () => {
+  const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/auth/session`, {
+    skipAuthRedirect: true,
+  } as any);
+
+  return res;
+};
+
+export const getActiveSessions = async () => {
+  const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/auth/sessions`);
+  return res;
+};
+
+export const revokeAuthSession = async (sessionId: string) => {
+  const res = await axios.delete(
+    `${import.meta.env.VITE_API_URL}/api/auth/sessions/${sessionId}`,
+  );
+  return res;
+};
+
+export const revokeOtherAuthSessions = async () => {
+  const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/auth/sessions/others`);
   return res;
 };
 
@@ -673,6 +736,43 @@ export const UpdateLeave = async (obj) => {
   return res;
 };
 
+export const getRolesList = async (companyId: string) => {
+  const res = await axios.get(
+    `${import.meta.env.VITE_API_URL}/api/assignroles/list/${companyId}`,
+  );
+
+  return res;
+};
+
+export const assignEmployeeRole = async (
+  employeeId: string,
+  roleId: string | null,
+) => {
+  const res = await axios.patch(
+    `${import.meta.env.VITE_API_URL}/api/employees/assign-role`,
+    { employeeId, roleId: roleId || null },
+  );
+
+  return res;
+};
+
+export const getUserPreferences = async () => {
+  const res = await axios.get(
+    `${import.meta.env.VITE_API_URL}/api/auth/preferences`,
+  );
+
+  return res;
+};
+
+export const updateUserPreferences = async (preferences: Record<string, unknown>) => {
+  const res = await axios.patch(
+    `${import.meta.env.VITE_API_URL}/api/auth/preferences`,
+    { preferences },
+  );
+
+  return res;
+};
+
 export const getleaveRequests = async (companyId) => {
   const res = await axios.get(
     `${import.meta.env.VITE_API_URL}/api/leave-requests/${companyId}`,
@@ -901,18 +1001,14 @@ export const handleGetPdfLetter = async (employeeId: string) => {
       return [];
     }
 
-    // 3️⃣ API call
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/allLetter/${employeeId}`,
+      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/employee`,
       {
-        // headers: {
-        //   Authorization: `Bearer ${token}`,
-        //   "Content-Type": "application/json",
-        // },
+        params: { employeeId },
       },
     );
     if (response.status === 200) {
-      const data = response.data;
+      const data = response.data?.letters ?? response.data;
       return Array.isArray(data) ? data : [data];
     }
 
@@ -935,16 +1031,9 @@ export const handleAddPdfLetter = async (
     // const token = localStorage.getItem("token");
     // if (!token) return { success: false, error: "No token found" };
 
-    // 2️⃣ API call
     const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/offer`,
+      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/upload`,
       obj,
-      // {
-      //   headers: {
-      //     Authorization: `Bearer ${token}`,
-      //     "Content-Type": "application/json"
-      //   }
-      // }
     );
 
     if (response.status === 200) {
@@ -1026,9 +1115,10 @@ export const getAllCandidates = async () => {
 };
 
 export const getSingleCandidate = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Candidate");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/candidate/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/candidate/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1080,9 +1170,10 @@ export const getAllCompanyJob = async () => {
 };
 
 export const getSingleCompanyJob = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Company job");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/companyJob/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/companyJob/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1131,9 +1222,10 @@ export const getAllJob = async () => {
 };
 
 export const getSingleJob = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Job");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/job/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/job/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1191,9 +1283,10 @@ export const getAllApplication = async () => {
 };
 
 export const getSingleApplication = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Application");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/application/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/application/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1269,9 +1362,10 @@ export const getAllProduct = async () => {
 };
 
 export const getSingleProduct = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Product");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/product/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/product/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1312,9 +1406,10 @@ export const getAllLead = async (currentMonth) => {
 };
 
 export const getSingleLead = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Lead");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/lead/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/lead/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1384,6 +1479,15 @@ export const getMessage = async (leadId: string) => {
 
 export const getBillingOverview = async () => {
   return axios.get(`${import.meta.env.VITE_API_URL}/api/billing/overview`);
+};
+
+export const submitEnterpriseInquiry = async (payload: {
+  contactName: string;
+  contactEmail: string;
+  message: string;
+  companySize?: string;
+}) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/billing/enterprise-inquiry`, payload);
 };
 
 export const upgradeBillingPlan = async (planCode: string) => {
@@ -1464,6 +1568,19 @@ export const confirmPasswordReset = async (token: string, newPassword: string) =
 export const verifyMfaLogin = async (mfaChallengeToken: string, code: string) => {
   return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/verify-login`, {
     mfaChallengeToken,
+    code,
+  });
+};
+
+export const setupMfaEnrollment = async (mfaEnrollmentToken: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/enroll/setup`, {
+    mfaEnrollmentToken,
+  });
+};
+
+export const enableMfaEnrollment = async (mfaEnrollmentToken: string, code: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/enroll/enable`, {
+    mfaEnrollmentToken,
     code,
   });
 };

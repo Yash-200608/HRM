@@ -3,6 +3,7 @@ const Department = require("../../models/personalOffice/departmentModel.js");
 const Company = require("../../models/personalOffice/companyModel.js");
 const { EmployeeHistory } = require("../../models/personalOffice/EmployeeHistoryModel.js");
 const { Employee } = require("../../models/personalOffice/employeeModel.js");
+const { recordSecurityAudit } = require("../../service/securityAuditService.js");
 
 /* helper */
 const totalAmount = (arr = []) =>
@@ -120,6 +121,18 @@ const createSalary = async (req, res) => {
     /* update employee current salary */
     employee.monthSalary = netSalary;
     await employee.save();
+
+    await recordSecurityAudit("payroll.salary.created", req, {
+      resourceType: "payroll",
+      resourceId: newSalary._id,
+      companyId,
+      metadata: {
+        employeeId,
+        month,
+        year,
+        netSalary,
+      },
+    });
 
     res.status(201).json({
       message: "Salary slip created successfully",

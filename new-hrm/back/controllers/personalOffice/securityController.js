@@ -5,16 +5,18 @@ const {
 } = require("../../service/passwordResetService.js");
 const {
   beginMfaSetup,
+  beginMfaSetupForEnrollment,
   enableMfa,
+  enableMfaForEnrollment,
   disableMfa,
   completeMfaLogin,
   buildMfaLoginChallenge,
   regenerateRecoveryCodes,
 } = require("../../service/mfaService.js");
-const { buildUserSubscriptionFields } = require("../../service/tokenClaimsService.js");
-const { generateAccessToken, generateRefreshToken } = require("../../service/service.js");
 const { getAccountTypeFromRole } = require("../../service/sessionSecurityService.js");
 const { buildComplianceExport } = require("../../service/complianceExportService.js");
+const { issueAuthenticatedSession } = require("../../service/authLoginService.js");
+const { recordSecurityAudit } = require("../../service/securityAuditService.js");
 
 async function requestPasswordResetHandler(req, res) {
   try {
@@ -66,6 +68,10 @@ async function setupMfaHandler(req, res) {
 async function enableMfaHandler(req, res) {
   try {
     const result = await enableMfa(req.user, req.body?.code);
+    await recordSecurityAudit("auth.mfa.enabled", req, {
+      resourceType: "account",
+      resourceId: req.user?.id,
+    });
     return res.status(200).json({ message: "MFA enabled", data: result });
   } catch (error) {
     const status = error.status || 500;
@@ -76,6 +82,10 @@ async function enableMfaHandler(req, res) {
 async function disableMfaHandler(req, res) {
   try {
     const result = await disableMfa(req.user, req.body?.code);
+    await recordSecurityAudit("auth.mfa.disabled", req, {
+      resourceType: "account",
+      resourceId: req.user?.id,
+    });
     return res.status(200).json({ message: "MFA disabled", data: result });
   } catch (error) {
     const status = error.status || 500;
@@ -96,38 +106,78 @@ async function regenerateRecoveryCodesHandler(req, res) {
   }
 }
 
+async function setupMfaEnrollmentHandler(req, res) {
+  try {
+    const result = await beginMfaSetupForEnrollment(req.body?.mfaEnrollmentToken);
+    return res.status(200).json({ data: result });
+  } catch (error) {
+    if (error.name === "TokenExpiredError" || error.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "MFA enrollment session expired. Please login again." });
+    }
+
+    const status = error.status || 500;
+    return res.status(status).json({ message: error.message || "MFA setup failed" });
+  }
+}
+
+async function enableMfaEnrollmentHandler(req, res) {
+  try {
+    const { account, recoveryCodes } = await enableMfaForEnrollment(
+      req.body?.mfaEnrollmentToken,
+      req.body?.code
+    );
+    const session = await issueAuthenticatedSession(req, res, account, {
+      accountType: getAccountTypeFromRole(account.role),
+      mfaUsed: true,
+    });
+
+    await recordSecurityAudit("auth.mfa.enabled", req, {
+      resourceType: "account",
+      resourceId: account._id,
+      metadata: { source: "login_enrollment" },
+    });
+
+    return res.status(200).json({
+      message: "MFA enabled",
+      accessToken: session.accessToken,
+      user: {
+        ...session.userData,
+        role: account.role,
+        fullName: session.userData.username || session.userData.fullName,
+        entitlements: session.subscriptionFields.entitlements,
+        subscriptionPlan: session.subscriptionFields.subscriptionPlan,
+      },
+      data: {
+        recoveryCodes,
+      },
+    });
+  } catch (error) {
+    if (error.name === "TokenExpiredError" || error.name === "JsonWebTokenError") {
+      return res.status(401).json({ message: "MFA enrollment session expired. Please login again." });
+    }
+
+    const status = error.status || 500;
+    return res.status(status).json({ message: error.message || "MFA enable failed" });
+  }
+}
+
 async function verifyMfaLoginHandler(req, res) {
   try {
     const account = await completeMfaLogin(req.body?.mfaChallengeToken, req.body?.code);
-    const subscriptionFields = await buildUserSubscriptionFields(account, {
+    const session = await issueAuthenticatedSession(req, res, account, {
       accountType: getAccountTypeFromRole(account.role),
+      mfaUsed: true,
     });
-    const accessToken = generateAccessToken(subscriptionFields.tokenInput);
-    const refreshToken = generateRefreshToken({ id: account._id });
-
-    account.refreshToken = refreshToken;
-    await account.save();
-
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-    });
-
-    const userData = account.toObject();
-    delete userData.password;
-    delete userData.mfaSecret;
-    delete userData.mfaPendingSecret;
 
     return res.status(200).json({
       message: "Login successful",
-      accessToken,
+      accessToken: session.accessToken,
       user: {
-        ...userData,
+        ...session.userData,
         role: account.role,
-        fullName: userData.username,
-        entitlements: subscriptionFields.entitlements,
-        subscriptionPlan: subscriptionFields.subscriptionPlan,
+        fullName: session.userData.username || session.userData.fullName,
+        entitlements: session.subscriptionFields.entitlements,
+        subscriptionPlan: session.subscriptionFields.subscriptionPlan,
       },
     });
   } catch (error) {
@@ -182,6 +232,8 @@ module.exports = {
   enableMfaHandler,
   disableMfaHandler,
   regenerateRecoveryCodesHandler,
+  setupMfaEnrollmentHandler,
+  enableMfaEnrollmentHandler,
   verifyMfaLoginHandler,
   exportComplianceHandler,
   buildMfaLoginChallenge,

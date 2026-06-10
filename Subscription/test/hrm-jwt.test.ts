@@ -37,6 +37,8 @@ test('verifyHrmBearerToken accepts v1 JWT claims with principalKind and session 
   const token = jwt.sign(
     {
       ver: 'v1',
+      iss: 'hrm-platform',
+      aud: 'hrm-platform',
       id: 'emp-1',
       role: 'employee',
       companyId: 'org-1',
@@ -58,4 +60,23 @@ test('verifyHrmBearerToken accepts v1 JWT claims with principalKind and session 
   assert.equal(verified?.payload.sessionId, 'session-123');
   assert.equal(verified?.payload.tokenVersion, 4);
   assert.deepEqual(verified?.payload.roles, ['employee']);
+});
+
+test('verifyHrmBearerToken rejects v1 JWT claims with invalid issuer or audience', async () => {
+  const { verifyHrmBearerToken } = await import('../src/modules/auth/hrm-jwt.service');
+  const invalidIssuer = jwt.sign(
+    {
+      ver: 'v1',
+      iss: 'wrong-issuer',
+      aud: 'hrm-platform',
+      id: 'emp-2',
+      role: 'employee',
+      companyId: 'org-2',
+      principalKind: 'employee',
+      sessionId: 'session-456',
+    },
+    process.env.HRM_ACCESS_TOKEN_SECRET as string,
+  );
+
+  assert.equal(verifyHrmBearerToken(invalidIssuer), null);
 });

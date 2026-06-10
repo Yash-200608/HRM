@@ -1,5 +1,6 @@
 const { Admin } = require("../../../models/personalOffice/authModel.js");
 const { Employee } = require("../../../models/personalOffice/employeeModel.js");
+const { SuperAdmin } = require("../../../models/personalOffice/superadminModel.js");
 const Company = require("../../../models/personalOffice/companyModel.js");
 const Department = require("../../../models/personalOffice/departmentModel.js");
 const { getIO } = require("../../../socketHelpers.js");
@@ -25,32 +26,35 @@ const addManager = async (req, res) => {
 
     let user = await Admin.findOne({ _id: userId, companyId });
 
-if (!user) {
+    if (!user) {
+      user = await SuperAdmin.findOne({ _id: userId });
+      if (!user) {
+        user = await Employee.findOne({
+          _id: userId,
+          createdBy: companyId
+        }).populate("assignedRole");
 
-  user = await Employee.findOne({
-    _id: userId,
-    createdBy: companyId
-  }).populate("assignedRole");
+        if (!user) {
+          return res.status(403).json({
+            message: "Unauthorized access."
+          });
+        }
 
-  if (!user) {
-    return res.status(403).json({
-      message: "Unauthorized access."
-    });
-  }
+        const permissions =
+          user?.assignedRole?.permissions || {};
 
-  const permissions =
-    user?.assignedRole?.permissions || {};
+        const hasPermission =
+          permissions?.task_manager?.create === true ||
+          permissions?.tasks?.create === true;
 
-  const hasPermission =
-    permissions?.task_manager?.create === true ||
-    permissions?.tasks?.create === true;
-
-  if (!hasPermission) {
-    return res.status(403).json({
-      message: "You do not have permission to manage managers."
-    });
-  }
-}
+        if (!hasPermission) {
+          return res.status(403).json({
+            message: "You do not have permission to manage managers."
+          });
+        }
+      }
+      // super admin: user is set, proceed without permission check
+    }
 
     const department = await Department.findOne({ _id: obj.department, createdBy: companyId });
 
@@ -92,32 +96,35 @@ const getManagers = async (req, res) => {
       return res.status(404).json({ message: "Company not found." });
     }
 
-    // validate admin
+    // validate admin or super or employee with perm
     let user = await Admin.findOne({ _id: userId, companyId });
     if (!user) {
-      user = await Employee.findOne({ _id: userId, createdBy: companyId }).populate("department", "name managers");
-
-
+      user = await SuperAdmin.findOne({ _id: userId });
       if (!user) {
-  return res.status(403).json({
-    message: "Unauthorized access."
-  });
-}
+        user = await Employee.findOne({ _id: userId, createdBy: companyId }).populate("department", "name managers");
 
-await user.populate("assignedRole");
+        if (!user) {
+          return res.status(403).json({
+            message: "Unauthorized access."
+          });
+        }
 
-const permissions =
-  user?.assignedRole?.permissions || {};
+        await user.populate("assignedRole");
 
-const hasPermission =
-  permissions?.task_manager?.view === true ||
-  permissions?.tasks?.view === true;
+        const permissions =
+          user?.assignedRole?.permissions || {};
 
-if (!hasPermission) {
-  return res.status(403).json({
-    message: "Unauthorized access."
-  });
-}
+        const hasPermission =
+          permissions?.task_manager?.view === true ||
+          permissions?.tasks?.view === true;
+
+        if (!hasPermission) {
+          return res.status(403).json({
+            message: "Unauthorized access."
+          });
+        }
+      }
+      // super admin: allow
     }
 
 
@@ -161,32 +168,35 @@ const updateManager = async (req, res) => {
 
    let user = await Admin.findOne({ _id: userId, companyId });
 
-if (!user) {
+   if (!user) {
+     user = await SuperAdmin.findOne({ _id: userId });
+     if (!user) {
+       user = await Employee.findOne({
+         _id: userId,
+         createdBy: companyId
+       }).populate("assignedRole");
 
-  user = await Employee.findOne({
-    _id: userId,
-    createdBy: companyId
-  }).populate("assignedRole");
+       if (!user) {
+         return res.status(403).json({
+           message: "Unauthorized access."
+         });
+       }
 
-  if (!user) {
-    return res.status(403).json({
-      message: "Unauthorized access."
-    });
-  }
+       const permissions =
+         user?.assignedRole?.permissions || {};
 
-  const permissions =
-    user?.assignedRole?.permissions || {};
+       const hasPermission =
+         permissions?.task_manager?.create === true ||
+         permissions?.tasks?.create === true;
 
-  const hasPermission =
-    permissions?.task_manager?.create === true ||
-    permissions?.tasks?.create === true;
-
-  if (!hasPermission) {
-    return res.status(403).json({
-      message: "You do not have permission to manage managers."
-    });
-  }
-}
+       if (!hasPermission) {
+         return res.status(403).json({
+           message: "You do not have permission to manage managers."
+         });
+       }
+     }
+     // super admin: proceed
+   }
 
     const department = await Department.findOne({
       _id: obj.department,
@@ -228,32 +238,35 @@ const deleteManager = async (req, res) => {
     }
    let user = await Admin.findOne({ _id: userId, companyId });
 
-if (!user) {
+   if (!user) {
+     user = await SuperAdmin.findOne({ _id: userId });
+     if (!user) {
+       user = await Employee.findOne({
+         _id: userId,
+         createdBy: companyId
+       }).populate("assignedRole");
 
-  user = await Employee.findOne({
-    _id: userId,
-    createdBy: companyId
-  }).populate("assignedRole");
+       if (!user) {
+         return res.status(403).json({
+           message: "Unauthorized access."
+         });
+       }
 
-  if (!user) {
-    return res.status(403).json({
-      message: "Unauthorized access."
-    });
-  }
+       const permissions =
+         user?.assignedRole?.permissions || {};
 
-  const permissions =
-    user?.assignedRole?.permissions || {};
+       const hasPermission =
+         permissions?.task_manager?.create === true ||
+         permissions?.tasks?.create === true;
 
-  const hasPermission =
-    permissions?.task_manager?.create === true ||
-    permissions?.tasks?.create === true;
-
-  if (!hasPermission) {
-    return res.status(403).json({
-      message: "You do not have permission to manage managers."
-    });
-  }
-}
+       if (!hasPermission) {
+         return res.status(403).json({
+           message: "You do not have permission to manage managers."
+         });
+       }
+     }
+     // super admin allowed
+   }
 
     const department = await Department.findOne({ _id: departmentId, createdBy: companyId });
 

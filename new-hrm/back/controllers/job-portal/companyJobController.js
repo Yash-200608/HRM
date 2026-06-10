@@ -2,6 +2,8 @@ const { CompanyJob } = require("../../models/job-portal/companyJob.js")
 const { Admin } = require("../../models/personalOffice/authModel.js");
 const uploadToCloudinary = require("../../cloudinary/uploadToCloudinary.js");
 
+const resolveRequestId = (req) => req.params.id || req.query.id || req.body.id;
+
 // Create Company
 const createCompany = async (req, res) => {
   try {
@@ -84,7 +86,12 @@ const getCompanies = async (req, res) => {
 // Get Single Company by ID
 const getCompanyById = async (req, res) => {
   try {
-    const company = await CompanyJob.findById(req.params.id);
+    const id = resolveRequestId(req);
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Company id is required" });
+    }
+
+    const company = await CompanyJob.findById(id);
     if (!company) {
       return res.status(404).json({ success: false, message: "Company not found" });
     }
@@ -144,12 +151,17 @@ const updateCompany = async (req, res) => {
 // Delete Company
 const deleteCompany = async (req, res) => {
   try {
-    const company = await CompanyJob.findById(req.params.id);
+    const id = resolveRequestId(req);
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Company id is required" });
+    }
+
+    const company = await CompanyJob.findById(id);
     if (!company) {
       return res.status(404).json({ success: false, message: "Company not found" });
     }
 
-    await company.remove();
+    await company.deleteOne();
     res.status(200).json({ success: true, message: "Company deleted successfully" });
   } catch (error) {
     console.error(error);

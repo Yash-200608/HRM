@@ -4,6 +4,7 @@ const { Employee } = require("../models/personalOffice/employeeModel.js");
 const { SuperAdmin } = require("../models/personalOffice/superadminModel.js");
 
 const REFRESH_TOKEN_COOKIE = "refreshToken";
+const ACCESS_TOKEN_COOKIE = "accessToken";
 const OAUTH_SESSION_COOKIE = "hrm_oauth_session";
 
 const defaultModels = {
@@ -18,6 +19,57 @@ const clearCookieOptions = () => ({
   sameSite: "lax",
   path: "/",
 });
+
+const accessTokenCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: resolveAccessTokenMaxAgeMs(),
+});
+
+function resolveAccessTokenMaxAgeMs() {
+  const configured = process.env.ACCESS_TOKEN_EXPIRES_IN || "15m";
+  const match = String(configured).trim().match(/^(\d+)([smhd])$/i);
+
+  if (!match) {
+    return 15 * 60 * 1000;
+  }
+
+  const value = Number(match[1]);
+  const unit = match[2].toLowerCase();
+
+  if (unit === "s") return value * 1000;
+  if (unit === "m") return value * 60 * 1000;
+  if (unit === "h") return value * 60 * 60 * 1000;
+  return value * 24 * 60 * 60 * 1000;
+}
+
+const getAccessTokenFromRequest = (req) => {
+  const cookieToken = req.cookies?.[ACCESS_TOKEN_COOKIE];
+  if (cookieToken) {
+    return cookieToken;
+  }
+
+  return getBearerToken(req);
+};
+
+const setAccessTokenCookie = (res, accessToken) => {
+  res.cookie(ACCESS_TOKEN_COOKIE, accessToken, accessTokenCookieOptions());
+};
+
+const setRefreshTokenCookie = (res, refreshToken) => {
+  res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, clearCookieOptions());
+};
+
+const issueAuthCookies = (res, { accessToken, refreshToken }) => {
+  if (refreshToken) {
+    setRefreshTokenCookie(res, refreshToken);
+  }
+  if (accessToken) {
+    setAccessTokenCookie(res, accessToken);
+  }
+};
 
 const getBearerToken = (req) => {
   const authHeader = req.headers?.authorization;
@@ -116,14 +168,32 @@ const forceAccountReauthentication = async ({ userId, accountType }, models = de
   );
 };
 
+const { revokeAuthSession } = require("./authSessionService.js");
+
 const revokeRequestRefreshTokens = async (req, models = defaultModels) => {
-  const refreshTokenResult = await revokeRefreshToken(req.cookies?.[REFRESH_TOKEN_COOKIE], models);
+  const refreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE];
+  const refreshTokenResult = await revokeRefreshToken(refreshToken, models);
   let accountRevoked = false;
+  let sessionRevoked = false;
   const bearerToken = getBearerToken(req);
+
+  if (refreshToken) {
+    try {
+      const refreshDecoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+      if (refreshDecoded?.sessionId) {
+        sessionRevoked = Boolean(await revokeAuthSession(refreshDecoded.sessionId));
+      }
+    } catch (err) {
+      sessionRevoked = false;
+    }
+  }
 
   if (bearerToken) {
     try {
       const decoded = jwt.verify(bearerToken, process.env.ACCESS_TOKEN_SECRET);
+      if (decoded?.sessionId) {
+        sessionRevoked = sessionRevoked || Boolean(await revokeAuthSession(decoded.sessionId));
+      }
       accountRevoked = Boolean(await revokeAccountRefreshToken({ userId: decoded.id, role: decoded.role }, models));
     } catch (err) {
       accountRevoked = false;
@@ -133,20 +203,28 @@ const revokeRequestRefreshTokens = async (req, models = defaultModels) => {
   return {
     refreshTokenRevoked: refreshTokenResult.modifiedCount > 0 || refreshTokenResult.matchedCount > 0,
     accountRevoked,
+    sessionRevoked,
   };
 };
 
 const clearAuthCookies = (res) => {
   const options = clearCookieOptions();
   res.clearCookie(REFRESH_TOKEN_COOKIE, options);
+  res.clearCookie(ACCESS_TOKEN_COOKIE, options);
   res.clearCookie(OAUTH_SESSION_COOKIE, options);
 };
 
 module.exports = {
+  ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
   OAUTH_SESSION_COOKIE,
+  accessTokenCookieOptions,
   clearCookieOptions,
+  getAccessTokenFromRequest,
   getBearerToken,
+  issueAuthCookies,
+  setAccessTokenCookie,
+  setRefreshTokenCookie,
   getAccountTypeFromRole,
   isAccessTokenInvalidated,
   revokeRefreshToken,

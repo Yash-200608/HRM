@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { hasPermission } from "@/lib/permissions";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function PermissionRoute({
   module,
@@ -10,7 +11,7 @@ export default function PermissionRoute({
   action?: string;
   children: React.ReactNode;
 }) {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const { user } = useAuth();
 
   if (!hasPermission(user, module, action || "view")) {
     return <Navigate to="/dashboard" replace />;

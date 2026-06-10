@@ -1,10 +1,14 @@
 import { z } from 'zod';
+import { resolveRedisUrl } from './resolveRedisUrl';
 
 const envInput = {
   ...process.env,
   PORT: process.env.SUBSCRIPTION_PORT ?? process.env.PORT,
   MONGODB_URI: process.env.MONGODB_URI ?? process.env.MONGO_URI,
+  REDIS_URL: resolveRedisUrl(process.env),
   HRM_ACCESS_TOKEN_SECRET: process.env.HRM_ACCESS_TOKEN_SECRET ?? process.env.ACCESS_TOKEN_SECRET ?? '',
+  JWT_ISSUER: process.env.JWT_ISSUER ?? 'hrm-platform',
+  JWT_AUDIENCE: process.env.JWT_AUDIENCE ?? 'hrm-platform',
 };
 
 const envSchema = z.object({
@@ -15,6 +19,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(16),
   ADMIN_JWT_SECRET: z.string().min(16),
   HRM_ACCESS_TOKEN_SECRET: z.string().optional().default(''),
+  JWT_ISSUER: z.string().optional().default('hrm-platform'),
+  JWT_AUDIENCE: z.string().optional().default('hrm-platform'),
   INTERNAL_API_KEY: z.string().min(8),
   API_KEY_PEPPER: z.string().min(8),
   PASSWORD_PEPPER: z.string().min(8),

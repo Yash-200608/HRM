@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https: http://localhost:5000; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' http://localhost:5000 ws://localhost:5000 https:; frame-ancestors 'none'; form-action 'self';"
+    />
+
+    <!-- Inter Font (weights 300-800) -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    />
+
     <!-- TODO: Set the document title to the name of your application -->
     <title>Office Management System</title>
     <meta name="description" content="Lovable Generated Project" />

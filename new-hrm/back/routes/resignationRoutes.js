@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/authMiddleware");
+const checkPermission = require("../middleware/checkPermission");
 const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
 
 const {
@@ -12,7 +13,7 @@ const {
 
 router.post("/resignation", auth, enforceModuleAccess("resignation"), createResignation);
 router.get("/resignation/me", auth, enforceModuleAccess("resignation"), getMyResignation);
-router.get("/resignation", auth, enforceModuleAccess("resignation"), getAllResignations);
-router.put("/resignation/:id", auth, enforceModuleAccess("resignation"), updateResignation);
+router.get("/resignation", auth, enforceModuleAccess("resignation"), checkPermission("Resignation", "edit"), getAllResignations);
+router.put("/resignation/:id", auth, enforceModuleAccess("resignation"), checkPermission("Resignation", "edit"), updateResignation);
 
 module.exports = router;

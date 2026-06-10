@@ -1,11 +1,15 @@
 const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 const DEFAULT_FROM_EMAIL = "no-reply@example.com";
-const RESEND_API_URL = "https://api.resend.com/emails";
 
 let gmailTransporter = null;
+let resendInstance = null;
 
 function resolveFromEmail() {
+  // Per Resend guidelines: For production, `from` must use a domain you have verified
+  // at https://resend.com/domains. Do not use unverified addresses (e.g. @gmail.com)
+  // or the test address onboarding@resend.dev in real deployments.
   return (
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
@@ -45,37 +49,50 @@ function getGmailTransporter() {
   return gmailTransporter;
 }
 
-async function sendViaResend({ to, subject, text, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error("RESEND_API_KEY is not configured");
-  }
+async function sendViaResend(payload = {}) {
+  const resend = getResendClient();
+  const from = resolveFromEmail();
 
-  const response = await fetch(RESEND_API_URL, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      from: resolveFromEmail(),
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      text: text || undefined,
-      html: html || undefined,
-    }),
-  });
+  const { to, subject, text, html, ...rest } = payload;
 
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(body?.message || `Resend request failed with status ${response.status}`);
+  // Official Resend Node.js SDK usage (per strict guidelines).
+  // Always use camelCase parameters (replyTo, scheduledAt, idempotencyKey, etc.).
+  // The SDK returns { data, error } — check error instead of throwing for Resend errors.
+  const sendOptions = {
+    from,
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    html: html || undefined,
+    text: text || undefined,
+    ...rest,
+  };
+
+  const { data, error } = await resend.emails.send(sendOptions);
+
+  if (error) {
+    return {
+      success: false,
+      provider: "resend",
+      error: error.message || "Resend error",
+    };
   }
 
   return {
     success: true,
     provider: "resend",
-    messageId: body?.id || null,
+    messageId: data?.id || null,
   };
+}
+
+function getResendClient() {
+  if (!resendInstance) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error("RESEND_API_KEY is not configured");
+    }
+    resendInstance = new Resend(apiKey);
+  }
+  return resendInstance;
 }
 
 async function sendViaGmail({ to, subject, text, html }) {

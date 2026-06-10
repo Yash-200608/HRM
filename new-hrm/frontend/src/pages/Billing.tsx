@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -39,6 +42,7 @@ import {
   createInvoiceRazorpayOrder,
   getBillingOverview,
   getBillingPaymentConfig,
+  submitEnterpriseInquiry,
   upgradeBillingPlan,
 } from "@/services/Service";
 import { formatDate } from "@/services/allFunctions";
@@ -145,6 +149,13 @@ const Billing: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState("");
   const [overview, setOverview] = useState<BillingOverview | null>(null);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [enterpriseForm, setEnterpriseForm] = useState({
+    contactName: "",
+    contactEmail: "",
+    companySize: "",
+    message: "",
+  });
+  const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
   const loadOverview = async () => {
     setLoading(true);
@@ -202,9 +213,52 @@ const Billing: React.FC = () => {
     [overview]
   );
 
+  const selectedPlanDetails = useMemo(
+    () => overview?.plans?.find((plan) => plan.code === selectedPlan),
+    [overview?.plans, selectedPlan]
+  );
+
+  const isPaidPlanSelection =
+    selectedPlanDetails != null &&
+    selectedPlanDetails.code !== "free" &&
+    (selectedPlanDetails.priceMonthly ?? 0) > 0;
+
+  const paidUpgradeBlocked = isPaidPlanSelection && !paymentConfig?.enabled;
+
+  const handleEnterpriseInquiry = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmittingInquiry(true);
+    try {
+      await submitEnterpriseInquiry(enterpriseForm);
+      toast({
+        title: "Inquiry sent",
+        description: "Our sales team will contact you about Enterprise pricing.",
+      });
+      setEnterpriseForm({ contactName: "", contactEmail: "", companySize: "", message: "" });
+    } catch (error: any) {
+      toast({
+        title: "Could not send inquiry",
+        description: error?.response?.data?.message || error?.message || "Try again later",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingInquiry(false);
+    }
+  };
+
   const handleUpgrade = async () => {
     if (!selectedPlan) {
       toast({ title: "Select a plan to upgrade", variant: "destructive" });
+      return;
+    }
+
+    if (paidUpgradeBlocked) {
+      toast({
+        title: "Payment provider not configured",
+        description:
+          "Paid plan upgrades are available after Razorpay keys are added. You can still switch to the Free plan.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -464,10 +518,19 @@ const Billing: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleUpgrade} disabled={upgrading || !selectedPlan}>
+            <Button
+              onClick={handleUpgrade}
+              disabled={upgrading || !selectedPlan || paidUpgradeBlocked}
+            >
               {upgrading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Upgrade
             </Button>
+            {paidUpgradeBlocked ? (
+              <p className="text-sm text-amber-800 md:col-span-2">
+                Razorpay is not configured yet. Paid upgrades will unlock once payment keys are
+                added. Free plan changes remain available.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -479,12 +542,64 @@ const Billing: React.FC = () => {
                 Custom pricing based on the features and scale your organization needs.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-slate-700">
+            <CardContent className="space-y-4 text-sm text-slate-700">
               <p>
-                Enterprise is not self-serve. Contact your account manager or platform support for a
-                tailored quote (SSO, white-label, lead portal, custom integrations, unlimited seats).
+                Enterprise is not self-serve. Request a tailored quote (SSO, white-label, lead
+                portal, custom integrations, unlimited seats).
               </p>
               <p className="font-medium">Custom pricing — not ₹0/mo</p>
+              <form onSubmit={handleEnterpriseInquiry} className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="enterpriseName">Contact name</Label>
+                  <Input
+                    id="enterpriseName"
+                    value={enterpriseForm.contactName}
+                    onChange={(e) =>
+                      setEnterpriseForm((current) => ({ ...current, contactName: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="enterpriseEmail">Work email</Label>
+                  <Input
+                    id="enterpriseEmail"
+                    type="email"
+                    value={enterpriseForm.contactEmail}
+                    onChange={(e) =>
+                      setEnterpriseForm((current) => ({ ...current, contactEmail: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="enterpriseSize">Company size (optional)</Label>
+                  <Input
+                    id="enterpriseSize"
+                    placeholder="e.g. 250 employees"
+                    value={enterpriseForm.companySize}
+                    onChange={(e) =>
+                      setEnterpriseForm((current) => ({ ...current, companySize: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="enterpriseMessage">What do you need?</Label>
+                  <Textarea
+                    id="enterpriseMessage"
+                    value={enterpriseForm.message}
+                    onChange={(e) =>
+                      setEnterpriseForm((current) => ({ ...current, message: e.target.value }))
+                    }
+                    placeholder="SSO, white-label, integrations, seat count..."
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={submittingInquiry} className="md:col-span-2 w-fit">
+                  {submittingInquiry ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Request Enterprise quote
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}

@@ -6,8 +6,15 @@
   "type": "commonjs",
   "scripts": {
     "start": "node app.js",
+    "kill-port": "powershell -ExecutionPolicy Bypass -File scripts/kill-port.ps1 -Port 5000",
+    "predev": "npm run kill-port",
     "dev": "nodemon app.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "audit:tenant-coverage": "node scripts/analyze-tenant-coverage.js",
+    "security:simulate": "node security-tests/runner.js",
+    "security:feedback": "node security-tests/feedback.js",
+    "seed:dev-admin": "node scripts/seed-dev-admin-password.js",
+    "clear:auth-rate-limit": "node scripts/clear-auth-rate-limit.js"
   },
   "engines": {
     "node": "20.x"
@@ -36,8 +43,13 @@
     "posthog-node": "^5.36.7",
     "puppeteer": "^24.43.1",
     "qrcode-terminal": "^0.12.0",
+    "redis": "^4.7.1",
+    "resend": "^6.12.4",
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

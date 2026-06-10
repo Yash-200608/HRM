@@ -19,6 +19,7 @@ const baseFeatures = {
   recruitment: false,
   performanceReviews: false,
   assetManagement: false,
+  learningManagement: false,
   apiAccess: false,
   workflowAutomation: false,
   customBranding: false,
@@ -27,6 +28,7 @@ const baseFeatures = {
   leadPortal: false,
   prioritySupport: false,
   customIntegrations: false,
+  aiAssistant: false,
 };
 
 export const defaultPlans: PlanDefinition[] = [
@@ -70,7 +72,7 @@ export const defaultPlans: PlanDefinition[] = [
     priceMonthly: 2499,
     priceYearly: 24990,
     currency: 'INR',
-    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true },
+    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true, aiAssistant: true },
   },
   {
     code: 'professional',
@@ -84,7 +86,7 @@ export const defaultPlans: PlanDefinition[] = [
     priceMonthly: 4999,
     priceYearly: 49990,
     currency: 'INR',
-    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, auditLogs: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true, recruitment: true, performanceReviews: true, assetManagement: true, apiAccess: true, workflowAutomation: true },
+    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, auditLogs: true, employeeDocuments: true, dataExport: true, approvalWorkflows: true, recruitment: true, performanceReviews: true, assetManagement: true, learningManagement: true, apiAccess: true, workflowAutomation: true, aiAssistant: true },
   },
   {
     code: 'enterprise',
@@ -98,7 +100,7 @@ export const defaultPlans: PlanDefinition[] = [
     priceMonthly: 0,
     priceYearly: 0,
     currency: 'INR',
-    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, auditLogs: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true, recruitment: true, performanceReviews: true, assetManagement: true, apiAccess: true, workflowAutomation: true, customBranding: true, sso: true, whiteLabel: true, leadPortal: true, prioritySupport: true, customIntegrations: true },
+    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, auditLogs: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true, recruitment: true, performanceReviews: true, assetManagement: true, learningManagement: true, apiAccess: true, workflowAutomation: true, customBranding: true, sso: true, whiteLabel: true, leadPortal: true, prioritySupport: true, customIntegrations: true, aiAssistant: true },
   },
   {
     code: 'legacy',
@@ -112,6 +114,6 @@ export const defaultPlans: PlanDefinition[] = [
     priceMonthly: 0,
     priceYearly: 0,
     currency: 'INR',
-    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, auditLogs: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true, recruitment: true, performanceReviews: true, assetManagement: true, apiAccess: true, workflowAutomation: true, customBranding: true, sso: true, whiteLabel: true, leadPortal: true, prioritySupport: true, customIntegrations: true },
+    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, auditLogs: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true, recruitment: true, performanceReviews: true, assetManagement: true, learningManagement: true, apiAccess: true, workflowAutomation: true, customBranding: true, sso: true, whiteLabel: true, leadPortal: true, prioritySupport: true, customIntegrations: true, aiAssistant: true },
   },
 ];

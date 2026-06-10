@@ -1,6 +1,10 @@
 const express = require("express");
+const authMiddleware = require("../middleware/authMiddleware.js");
+const checkPermission = require("../middleware/checkPermission.js");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 const upload = require(
   "../utils/uploadLetter"
@@ -75,6 +79,7 @@ const {
 
 router.post(
   "/upload",
+  checkPermission("employees", "edit"),
   upload.single("pdf"),
   uploadLetter
 );
@@ -103,6 +108,7 @@ router.post(
 
 router.get(
   "/employee",
+  checkPermission("employees", "view"),
   getEmployeeLetters
 );
 

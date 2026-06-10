@@ -49,6 +49,7 @@ export type EntitlementKey =
   | "recruitment"
   | "performanceReviews"
   | "assetManagement"
+  | "learningManagement"
   | "apiAccess"
   | "workflowAutomation"
   | "customBranding"
@@ -56,7 +57,8 @@ export type EntitlementKey =
   | "whiteLabel"
   | "leadPortal"
   | "prioritySupport"
-  | "customIntegrations";
+  | "customIntegrations"
+  | "aiAssistant";
 
 export const COMPANY_STATUS_VALUES: readonly CompanyStatusV1[];
 export const ENTITLEMENT_KEYS: readonly EntitlementKey[];

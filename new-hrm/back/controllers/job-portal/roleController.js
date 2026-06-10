@@ -8,7 +8,8 @@ const { Admin } = require("../../models/personalOffice/authModel.js");
 // =============================
 const addRole = async (req, res) => {
     try {
-        const { name, description, isActive, userId } = req.body;
+        const { name, description, isActive } = req.body;
+        const userId = req.user?.id;
         const admin = await Admin.findById(userId);
         if (!admin) return res.status(400).json({ success: false, message: "You are not authorized to add a role.Plase Contact Admin." })
 
@@ -120,7 +121,7 @@ const getSingleRole = async (req, res) => {
 const updateRole = async (req, res) => {
     try {
 
-        const admin = await Admin.findById(req.body.userId);
+        const admin = await Admin.findById(req.user?.id);
         if (!admin) return res.status(400).json({ success: false, message: "You are not authorized to update a role.Plase Contact Admin." })
 
 

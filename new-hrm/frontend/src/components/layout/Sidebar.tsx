@@ -7,9 +7,11 @@ import { SidebarProps, navItems, taskSubMenu, JobSubMenu, LeadSubMenu } from "@/
 import { useAuth } from '@/contexts/AuthContext';
 import { createPortal } from 'react-dom';
 import { hasPermission } from "@/lib/permissions";
+import { useTranslation } from "react-i18next";
 
 const Sidebar: React.FC<SidebarProps> = ({ setTaskName, setJobName, isOpen, onToggle, setActiveSidebar, setTaskSubPage, setJobSubPage, setLeadSubPage, setLeadName }) => {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const location = useLocation();
   const sidebarRef = useRef<HTMLDivElement>(null);
   const jobDropdownRef = useRef<HTMLDivElement>(null);
@@ -129,11 +131,18 @@ const filteredNavItems = navItems.filter((item) => {
 
   // SUPER ADMIN
   if (user?.role === "super_admin") {
+    if (item.module === "ai_admin") {
+      return false;
+    }
     return ["dashboard", "companies", "admins", "platform_revenue", "platform_ops", "security", "setting"].includes(item.module);
   }
 
   // ADMIN
   if (user?.role === "admin") {
+
+    if (item.module === "ai_admin") {
+      return true;
+    }
 
     // hide super admin modules
     if (["companies", "admins", "platform_revenue", "platform_ops"].includes(item.module)) {
@@ -188,13 +197,19 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
 
 
   const getRoleBadge = (role: string) => {
-    const roleLabels = {
-      super_admin: 'Super Admin',
-      admin: 'Admin',
-      employee: user?.department?.managers?.includes(user?._id) ? `Department Manager(${user?.department?.name})` : `Employee (${user?.department?.name})`,
-    };
-    return roleLabels[role as keyof typeof roleLabels] || role;
+    if (role === "super_admin") return t("roles.superAdmin");
+    if (role === "admin") return t("roles.admin");
+    if (role === "employee") {
+      const department = user?.department?.name || "";
+      return user?.department?.managers?.includes(user?._id)
+        ? t("roles.departmentManager", { department })
+        : t("roles.employee", { department });
+    }
+    return role;
   };
+
+  const getNavLabel = (module: string) =>
+    t(`nav.${module}`, { defaultValue: module });
 
   useEffect(() => {
     if (!isOpen) {
@@ -273,13 +288,13 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
     user?.role === "super_admin" ||
     hasPermission(user, "Resignation", "edit");
 
-  if (item.label === "Holidays") {
+  if (item.module === "holiday") {
     finalPath = isHolidayManager
       ? "/holidays/manage"
       : "/holidays";
   }
 
-  if (item.label === "Resignation") {
+  if (item.module === "Resignation") {
     finalPath = isResignationManager
       ? "/resignation/manage"
       : "/resignation";
@@ -291,12 +306,12 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
     return(
        <NavLink
                   to={finalPath}
-                  onClick={() => { setTaskName(""); setJobName(""); setLeadName(""); setActiveSidebar(item.label) }}
+                  onClick={() => { setTaskName(""); setJobName(""); setLeadName(""); setActiveSidebar(getNavLabel(item.module)) }}
                   className={cn(
                     "sidebar-item flex items-center justify-between p-2",
-                    (item === "Tasks" && isTasksActive) ||
-                      (item === "Job-Portal" && isJobPortalActive)
-                      || (item === "Lead-Portal" && isLeadPortalActive) || isThisActive
+                    (item.module === "tasks" && isTasksActive) ||
+                      (item.module === "jobportal" && isJobPortalActive)
+                      || (item.module === "leadportal" && isLeadPortalActive) || isThisActive
                       ? "bg-blue-600 text-white font-semibold"
                       : "",
                     !isOpen && "justify-center"
@@ -304,17 +319,17 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                 >
                   <div className="flex items-center gap-3">
                     <item.icon className="w-5 h-5 flex-shrink-0" />
-                    {isOpen && <span>{item.label === "Employees" ? user?.role === "super_admin" ? "Admins" : "Employees" : item?.label}</span>}
+                    {isOpen && <span>{getNavLabel(item.module)}</span>}
                   </div>
 
                   {/* Arrow only for Tasks & Job-Portal */}
-                  {isOpen && (item.label === "Tasks" || item.label === "Job-Portal" || item.label === "Lead-Portal") && (
+                  {isOpen && (item.module === "tasks" || item.module === "jobportal" || item.module === "leadportal") && (
                     <ChevronRight
                       className={cn(
                         "w-4 h-4 transition-transform duration-200",
-                        item.label === "Tasks" && showTaskSubMenu && "rotate-90",
-                        item.label === "Job-Portal" && showJobSubMenu && "rotate-90",
-                        item.label === "Lead-Portal" && showLeadSubMenu && "rotate-90"
+                        item.module === "tasks" && showTaskSubMenu && "rotate-90",
+                        item.module === "jobportal" && showJobSubMenu && "rotate-90",
+                        item.module === "leadportal" && showLeadSubMenu && "rotate-90"
                       )}
                     />
                   )}
@@ -325,7 +340,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
 
 
               // Tasks Dropdown 
-              if (item.label === "Tasks") {
+              if (item.module === "tasks") {
                 return (
                   <li
                     key={item.path}
@@ -347,7 +362,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                                 to={sub.path}
                                 onClick={() => {
                                   setTaskName("Tasks");
-                                  setTaskSubPage(sub?.label);
+                                  setTaskSubPage(getNavLabel(sub.module));
                                   if (window.innerWidth <= 768 && isOpen) onToggle();
                                 }}
                                 end={sub.path === "/tasks"} // only for dashboard
@@ -356,7 +371,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                                   isActive && "bg-sidebar-accent font-medium"
                                 )}
                               >
-                                {sub.label}
+                                {getNavLabel(sub.module)}
                               </NavLink>
                             </li>
                           ))}
@@ -370,7 +385,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
               }
 
               // Job Dropdown
-              if (item.label === "Job-Portal") {
+              if (item.module === "jobportal") {
                 return (
                   <li
                     key={item.path}
@@ -395,8 +410,8 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                                 to={sub.path}
                                 end={sub.path === "/jobs"} // only for dashboard
                                 onClick={() => {
-                                  setJobSubPage(sub?.label);
-                                  setJobName("Job-Portal");
+                                  setJobSubPage(getNavLabel(sub.module));
+                                  setJobName(getNavLabel("jobportal"));
                                   if (window.innerWidth <= 768 && isOpen) onToggle();
                                 }}
                                 className={({ isActive }) => cn(
@@ -404,7 +419,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                                   isActive && "bg-sidebar-accent font-medium"
                                 )}
                               >
-                                {sub.label}
+                                {getNavLabel(sub.module)}
                               </NavLink>
                             </li>
                           ))}
@@ -416,7 +431,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                 );
               }
 
-              if (item.label === "Lead-Portal") {
+              if (item.module === "leadportal") {
                 return (
                   <li
                     key={item.path}
@@ -441,8 +456,8 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                                 to={sub.path}
                                 end={sub.path === "/leads"} // only for dashboard
                                 onClick={() => {
-                                  setLeadSubPage(sub?.label);
-                                  setLeadName("Lead-Portal");
+                                  setLeadSubPage(getNavLabel(sub.module));
+                                  setLeadName(getNavLabel("leadportal"));
                                   if (window.innerWidth <= 768 && isOpen) onToggle();
                                 }}
                                 className={({ isActive }) => cn(
@@ -450,7 +465,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
                                   isActive && "bg-sidebar-accent font-medium"
                                 )}
                               >
-                                {sub.label}
+                                {getNavLabel(sub.module)}
                               </NavLink>
                             </li>
                           ))}
@@ -478,7 +493,7 @@ const filteredLeadSubMenu = LeadSubMenu.filter((sub) => {
             )}
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
-            {isOpen && <span>Logout</span>}
+            {isOpen && <span>{t("common.logout")}</span>}
           </button>
         </div>
       </aside>

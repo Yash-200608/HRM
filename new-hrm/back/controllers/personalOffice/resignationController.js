@@ -8,8 +8,6 @@ const { Employee } = require("../../models/personalOffice/employeeModel");
 exports.createResignation = async (req, res) => {
   try {
     const user = req.user;
-
-console.log("USER =>", req.user);
     const employeeId = user._id || user.id;
     const companyId = user.companyId || user.createdBy;
 
@@ -122,12 +120,6 @@ exports.updateResignation = async (req, res) => {
     const companyId =
       req.user.companyId || req.user.createdBy || req.user._id;
 
-      console.log("REQ COMPANY =>", companyId);
-console.log("DB COMPANY =>", resignation.companyId);
-console.log(
-  "MATCH =>",
-  String(resignation.companyId) === String(companyId)
-);
     if (String(resignation.companyId) !== String(companyId)) {
       
       return res.status(403).json({ message: "Unauthorized" });

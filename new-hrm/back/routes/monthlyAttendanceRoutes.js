@@ -5,6 +5,7 @@ const router = express.Router();
 const auth = require("../middleware/authMiddleware");
 
 const checkPermission = require("../middleware/checkPermission");
+const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
 
 const {
   getMonthlyAttendance,
@@ -13,6 +14,7 @@ const {
 router.get(
   "/monthly-attendance",
   auth,
+  enforceModuleAccess("attendance"),
   checkPermission("attendance", "view"),
   getMonthlyAttendance
 );

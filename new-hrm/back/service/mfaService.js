@@ -203,6 +203,27 @@ function verifyMfaChallengeToken(token) {
   return decoded;
 }
 
+function issueMfaEnrollmentToken(account) {
+  return jwt.sign(
+    {
+      purpose: "mfa_enrollment",
+      userId: String(account._id),
+      role: account.role,
+      email: account.email,
+    },
+    process.env.ACCESS_TOKEN_SECRET,
+    { expiresIn: MFA_CHALLENGE_TTL }
+  );
+}
+
+function verifyMfaEnrollmentToken(token) {
+  const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+  if (decoded.purpose !== "mfa_enrollment") {
+    throw new Error("Invalid MFA enrollment token");
+  }
+  return decoded;
+}
+
 async function buildMfaLoginChallenge(account) {
   return {
     mfaRequired: true,
@@ -210,6 +231,83 @@ async function buildMfaLoginChallenge(account) {
     accountType: account.role,
     email: account.email,
   };
+}
+
+async function buildMfaEnrollmentChallenge(account) {
+  return {
+    mfaEnrollmentRequired: true,
+    mfaEnrollmentToken: issueMfaEnrollmentToken(account),
+    accountType: account.role,
+    email: account.email,
+  };
+}
+
+async function beginMfaSetupForEnrollment(enrollmentToken) {
+  const decoded = verifyMfaEnrollmentToken(enrollmentToken);
+  const account = await resolveMfaAccount(decoded.role, decoded.userId);
+
+  if (!account) {
+    const error = new Error("Account not found");
+    error.status = 404;
+    throw error;
+  }
+
+  if (!isMfaRole(account.role)) {
+    const error = new Error("MFA is only available for admin accounts");
+    error.status = 403;
+    throw error;
+  }
+
+  if (account.mfaEnabled || account.mfaSecret) {
+    const error = new Error("MFA is already enabled for this account");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!account.mfaPendingSecret) {
+    account.mfaPendingSecret = generateSecret();
+    await account.save();
+  }
+
+  return {
+    secret: account.mfaPendingSecret,
+    otpauthUrl: buildOtpAuthUrl(account.email, account.mfaPendingSecret),
+    issuer: MFA_ISSUER,
+  };
+}
+
+async function enableMfaForEnrollment(enrollmentToken, code) {
+  const decoded = verifyMfaEnrollmentToken(enrollmentToken);
+  const account = await resolveMfaAccount(decoded.role, decoded.userId);
+
+  if (!account) {
+    const error = new Error("Account not found");
+    error.status = 404;
+    throw error;
+  }
+
+  if (!account.mfaPendingSecret) {
+    const error = new Error("MFA setup has not been started");
+    error.status = 400;
+    throw error;
+  }
+
+  const valid = verifyTotpCode(account.mfaPendingSecret, code);
+  if (!valid) {
+    const error = new Error("Invalid MFA code");
+    error.status = 400;
+    throw error;
+  }
+
+  account.mfaSecret = account.mfaPendingSecret;
+  account.mfaPendingSecret = null;
+  account.mfaEnabled = true;
+  account.mfaEnrolledAt = new Date();
+  const recoveryCodes = generateRecoveryCodes();
+  account.mfaRecoveryCodeHashes = buildRecoveryCodeHashes(recoveryCodes);
+  await account.save();
+
+  return { account, recoveryCodes };
 }
 
 async function completeMfaLogin(challengeToken, code) {
@@ -243,15 +341,46 @@ async function completeMfaLogin(challengeToken, code) {
   return account;
 }
 
+function isMfaMandatoryForRole(role) {
+  return process.env.REQUIRE_ADMIN_MFA === "true" && isMfaRole(role);
+}
+
+function isMfaEnrollmentRequired(account) {
+  if (!isMfaMandatoryForRole(account?.role)) {
+    return false;
+  }
+
+  if (account?.mfaSecret) {
+    return false;
+  }
+
+  return !account?.mfaEnabled;
+}
+
 function shouldRequireMfa(account) {
-  return Boolean(account?.mfaEnabled && account?.mfaSecret && isMfaRole(account.role));
+  return Boolean(account?.mfaSecret && isMfaRole(account.role));
+}
+
+function assessMfaAtLogin(account) {
+  if (shouldRequireMfa(account)) {
+    return { status: "challenge_required" };
+  }
+
+  if (isMfaEnrollmentRequired(account)) {
+    return { status: "enrollment_required" };
+  }
+
+  return { status: "not_required" };
 }
 
 module.exports = {
   SUPPORTED_MFA_ROLES,
   MFA_RECOVERY_CODE_COUNT,
   beginMfaSetup,
+  beginMfaSetupForEnrollment,
+  buildMfaEnrollmentChallenge,
   buildMfaLoginChallenge,
+  enableMfaForEnrollment,
   buildRecoveryCodeHashes,
   completeMfaLogin,
   consumeRecoveryCode,
@@ -262,5 +391,8 @@ module.exports = {
   isMfaRole,
   isTotpCode,
   regenerateRecoveryCodes,
+  assessMfaAtLogin,
+  isMfaEnrollmentRequired,
+  isMfaMandatoryForRole,
   shouldRequireMfa,
 };

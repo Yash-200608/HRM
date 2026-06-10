@@ -5,6 +5,8 @@ const {
 } = require("@hrm-subscription/shared-types");
 
 const JWT_CLAIMS_VERSION = "v1";
+const DEFAULT_JWT_ISSUER = "hrm-platform";
+const DEFAULT_JWT_AUDIENCE = "hrm-platform";
 
 const PRINCIPAL_KINDS = Object.freeze([
   "admin",
@@ -85,12 +87,24 @@ function extractEntitlementsFromSnapshot(featureSnapshot) {
   return ENTITLEMENT_KEYS.filter((key) => Boolean(featureSnapshot[key]));
 }
 
+function resolveJwtIssuer(value) {
+  const configured = value || process.env.JWT_ISSUER || DEFAULT_JWT_ISSUER;
+  return String(configured).trim() || DEFAULT_JWT_ISSUER;
+}
+
+function resolveJwtAudience(value) {
+  const configured = value || process.env.JWT_AUDIENCE || DEFAULT_JWT_AUDIENCE;
+  return String(configured).trim() || DEFAULT_JWT_AUDIENCE;
+}
+
 function buildJwtClaimsV1(input = {}) {
   const principalKind = resolvePrincipalKind(input.principalKind || input.role);
   const organizationId = normalizeOrganizationId(input.orgId, input.companyId, input.organizationId);
 
   return {
     ver: JWT_CLAIMS_VERSION,
+    iss: resolveJwtIssuer(input.iss),
+    aud: resolveJwtAudience(input.aud),
     id: String(input.id),
     role: String(input.role),
     companyId: organizationId,
@@ -127,6 +141,8 @@ function validateJwtClaims(decoded) {
   const organizationId = normalizeOrganizationId(decoded.orgId, decoded.companyId);
   const claims = {
     ver: decoded.ver || null,
+    iss: decoded.iss ? String(decoded.iss) : null,
+    aud: decoded.aud ? String(decoded.aud) : null,
     id: String(decoded.id),
     role: String(decoded.role),
     companyId: organizationId,
@@ -143,6 +159,8 @@ function validateJwtClaims(decoded) {
 
   if (!isLegacy) {
     const errors = [];
+    const expectedIssuer = resolveJwtIssuer();
+    const expectedAudience = resolveJwtAudience();
 
     if (!claims.sessionId) {
       errors.push("Missing sessionId");
@@ -150,6 +168,15 @@ function validateJwtClaims(decoded) {
 
     if (!PRINCIPAL_KINDS.includes(claims.principalKind)) {
       errors.push("Invalid principalKind");
+    }
+
+    if (!claims.iss || claims.iss !== expectedIssuer) {
+      errors.push("Invalid issuer");
+    }
+
+    const audience = claims.aud;
+    if (!audience || audience !== expectedAudience) {
+      errors.push("Invalid audience");
     }
 
     if (errors.length > 0) {
@@ -215,8 +242,12 @@ function mapModuleToEntitlement(moduleName) {
 }
 
 module.exports = {
+  DEFAULT_JWT_AUDIENCE,
+  DEFAULT_JWT_ISSUER,
   JWT_CLAIMS_VERSION,
   PRINCIPAL_KINDS,
+  resolveJwtAudience,
+  resolveJwtIssuer,
   buildJwtClaimsV1,
   buildSubscriptionRoles,
   extractEntitlementsFromSnapshot,

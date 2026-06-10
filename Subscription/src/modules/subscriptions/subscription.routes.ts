@@ -19,6 +19,34 @@ subscriptionRouter.get(
   }),
   asyncHandler(subscriptionController.getById),
 );
-subscriptionRouter.patch('/:id/upgrade', authenticate(['admin', 'service']), requireIdempotencyKey(), asyncHandler(subscriptionController.upgrade));
-subscriptionRouter.patch('/:id/downgrade', authenticate(['admin', 'service']), requireIdempotencyKey(), asyncHandler(subscriptionController.downgrade));
-subscriptionRouter.patch('/:id/cancel', authenticate(['admin', 'service']), requireIdempotencyKey(), asyncHandler(subscriptionController.cancel));
+const resolveSubscriptionOrganizationId = async (req: import('express').Request) => {
+  const subscription = await subscriptionRepository.findById(String(req.params.id));
+  return subscription
+    ? String(
+        (subscription.organization as { _id?: unknown } | null | undefined)?._id ??
+          subscription.organization,
+      )
+    : null;
+};
+
+subscriptionRouter.patch(
+  '/:id/upgrade',
+  authenticate(['admin', 'service']),
+  requireIdempotencyKey(),
+  requireResourceOrganizationAccess(resolveSubscriptionOrganizationId),
+  asyncHandler(subscriptionController.upgrade),
+);
+subscriptionRouter.patch(
+  '/:id/downgrade',
+  authenticate(['admin', 'service']),
+  requireIdempotencyKey(),
+  requireResourceOrganizationAccess(resolveSubscriptionOrganizationId),
+  asyncHandler(subscriptionController.downgrade),
+);
+subscriptionRouter.patch(
+  '/:id/cancel',
+  authenticate(['admin', 'service']),
+  requireIdempotencyKey(),
+  requireResourceOrganizationAccess(resolveSubscriptionOrganizationId),
+  asyncHandler(subscriptionController.cancel),
+);

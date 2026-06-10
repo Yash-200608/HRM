@@ -24,6 +24,7 @@ import {
 } from "@/services/Service";
 import { Shield, Download, KeyRound, Users } from "lucide-react";
 import OAuthAdminPanel from "@/components/auth/OAuthAdminPanel";
+import MfaSetupQrCode from "@/components/auth/MfaSetupQrCode";
 
 const SecuritySettings: React.FC = () => {
   const { user } = useAuth();
@@ -122,8 +123,12 @@ const SecuritySettings: React.FC = () => {
   const handleComplianceExport = async () => {
     setLoading(true);
     try {
+      const companyId =
+        typeof user?.companyId === "string"
+          ? user.companyId
+          : user?.companyId?._id;
       const response = await downloadComplianceExport(
-        user?.role === "super_admin" ? undefined : user?.companyId
+        user?.role === "super_admin" ? undefined : companyId
       );
       const blob = new Blob([response.data], { type: "application/json" });
       const url = window.URL.createObjectURL(blob);
@@ -199,13 +204,11 @@ const SecuritySettings: React.FC = () => {
                 Start MFA setup
               </Button>
             ) : (
-              <div className="space-y-3 rounded-md border p-4">
-                <p className="text-sm font-medium">Setup key</p>
-                <code className="block break-all text-xs bg-muted p-2 rounded">
-                  {setupData.secret}
-                </code>
-                <p className="text-xs text-muted-foreground break-all">{setupData.otpauthUrl}</p>
-              </div>
+              <MfaSetupQrCode
+                secret={setupData.secret}
+                otpauthUrl={setupData.otpauthUrl}
+                email={user?.email}
+              />
             )}
             <div className="space-y-2 max-w-xs">
               <Label htmlFor="mfaCode">Authenticator code</Label>
@@ -243,6 +246,21 @@ const SecuritySettings: React.FC = () => {
         </Card>
 
         <OAuthAdminPanel isSuperAdmin={isSuperAdmin} />
+
+        {isSuperAdmin && !canManageScim ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                SCIM provisioning
+              </CardTitle>
+              <CardDescription>
+                Tenant-level SCIM tokens are managed by each company admin. Sign in as a tenant
+                admin to configure directory sync for that organization.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        ) : null}
 
         {canManageScim ? (
           <Card>

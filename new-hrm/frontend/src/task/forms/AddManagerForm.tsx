@@ -80,7 +80,12 @@ const AddManagerForm = ({ isOpen, onIsOpenChange, initialData, setManagerRefresh
 
     const handleGetDepartments = async () => {
         try {
-            const data = await getDepartments(user?.companyId?._id);
+            const companyId = user?.companyId?._id || user?.companyId;
+            if (!companyId) {
+                console.warn("No companyId available for getDepartments");
+                return;
+            }
+            const data = await getDepartments(companyId);
             dispatch(getDepartment(data));
         } catch (err) {
             console.log(err);
@@ -89,7 +94,12 @@ const AddManagerForm = ({ isOpen, onIsOpenChange, initialData, setManagerRefresh
 
     const handleGetEmployees = async () => {
         try {
-            const data = await getEmployees(user?.companyId?._id);
+            const companyId = user?.companyId?._id || user?.companyId;
+            if (!companyId) {
+                console.warn("No companyId available for getEmployees");
+                return;
+            }
+            const data = await getEmployees(companyId);
             dispatch(getEmployeeList(data));
         } catch (err) {
             console.log(err);
@@ -97,16 +107,16 @@ const AddManagerForm = ({ isOpen, onIsOpenChange, initialData, setManagerRefresh
     };
 
     useEffect(() => {
-        if ((departmentList?.length === 0 || isOpen) && user?.role === "admin") {
+        if ((departmentList?.length === 0 || isOpen) && (user?.role === "admin" || user?.role === "super_admin")) {
             handleGetDepartments();
         }
-    }, [isOpen]);
+    }, [isOpen, user?.role, departmentList?.length]);
 
     useEffect(() => {
-        if ((employeeList?.length === 0 || isOpen) && user?.role === "admin") {
+        if ((employeeList?.length === 0 || isOpen) && (user?.role === "admin" || user?.role === "super_admin")) {
             handleGetEmployees();
         }
-    }, [isOpen]);
+    }, [isOpen, user?.role, employeeList?.length]);
 
     const handleDepartmentChange = (value) => {
         setDepartment(value);
@@ -152,9 +162,11 @@ const AddManagerForm = ({ isOpen, onIsOpenChange, initialData, setManagerRefresh
             let res;
 
             if (!initialData) {
-                res = await addTaskManager( user?._id, user?.companyId?._id, payload);
+                const companyId = user?.companyId?._id || user?.companyId;
+                res = await addTaskManager( user?._id, companyId, payload);
             } else {
-                res = await updateTaskManager( user?._id, user?.companyId?._id, payload);
+                const companyId = user?.companyId?._id || user?.companyId;
+                res = await updateTaskManager( user?._id, companyId, payload);
             }
 
             if (res.status === 200 || res.status === 201) {

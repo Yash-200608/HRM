@@ -208,4 +208,28 @@
 }
 }
 
+html.compact-view body {
+  font-size: 0.95rem;
+}
+
+html.compact-view .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 1rem;
+}
+
+html.compact-view .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem;
+}
+
+html.compact-view .p-6 {
+  padding: 1rem;
+}
+
+html.compact-view .gap-4 {
+  gap: 0.75rem;
+}
+
+html.compact-view .gap-6 {
+  gap: 1rem;
+}
+
 

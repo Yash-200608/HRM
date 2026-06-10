@@ -1,4 +1,5 @@
 const express = require("express");
+const { recordSecurityAudit } = require("../service/securityAuditService.js");
 
 const DEFAULT_BILLING_API_BASE_URL = "http://127.0.0.1:3000";
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -142,6 +143,30 @@ function createSubscriptionProxyRouter(options) {
 
       copyResponseHeaders(upstreamResponse, res);
       res.status(upstreamResponse.status);
+
+      if (
+        upstreamResponse.ok &&
+        upstreamPrefix === "/v1/subscriptions" &&
+        req.user?.companyId
+      ) {
+        const action = req.url.includes("/cancel")
+          ? "billing.subscription.cancelled"
+          : req.url.includes("/downgrade")
+            ? "billing.subscription.downgraded"
+            : null;
+
+        if (action) {
+          await recordSecurityAudit(action, req, {
+            resourceType: "subscription",
+            companyId: req.user.companyId,
+            metadata: {
+              path: req.url,
+              method: req.method,
+            },
+          });
+        }
+      }
+
       if (responseBody.length === 0) {
         res.end();
         return;
