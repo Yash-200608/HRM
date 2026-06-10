@@ -35,7 +35,8 @@
   import { formatDate } from "@/services/allFunctions";
   import { Helmet } from "react-helmet-async";
   import { useNavigate } from "react-router-dom";
-  import CompanyList from "@/components/cards/CompanyCard";
+  import SuperAdminDashboard from "@/components/dashboard/SuperAdminDashboard";
+  import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 
   import {
@@ -57,6 +58,7 @@
     const { toast } = useToast();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
+    const companyId = resolveCompanyIdFromUser(user);
 
     const dashboardData = useAppSelector(
       (state) => state?.dashboard?.dashboardData
@@ -78,7 +80,7 @@
 
     const loadAttendance = async () => {
 
-      if (!user?._id) return;
+      if (!user?._id || user?.role === "super_admin" || !companyId) return;
 
       try {
 
@@ -88,8 +90,7 @@
           await getAttendanceData(
             new Date().getMonth() + 1,
             new Date().getFullYear(),
-            user?.companyId?._id ||
-            user?.createdBy?._id
+            companyId
           );
 
         const records =
@@ -112,7 +113,7 @@
 
     loadAttendance();
 
-  }, [user?._id]);
+  }, [user?._id, companyId, dispatch]);
 
   const attendanceState = useMemo(() => {
 
@@ -245,8 +246,7 @@
         await getAttendanceData(
           new Date().getMonth() + 1,
           new Date().getFullYear(),
-          user?.companyId?._id ||
-          user?.createdBy?._id
+          companyId
         );
 
       dispatch(
@@ -290,8 +290,7 @@
         await getAttendanceData(
           new Date().getMonth() + 1,
           new Date().getFullYear(),
-          user?.companyId?._id ||
-          user?.createdBy?._id
+          companyId
         );
 
       dispatch(
@@ -329,24 +328,16 @@
     const handleGetDashboard = async () => {
       if (user?.role === "super_admin") return;
 
-      if (
-        !user?._id ||
-        (!user?.companyId?._id &&
-          !user?.createdBy?._id)
-      ) {
-        return toast({
-          title: "Error",
-          description: "Required field missing.",
-          variant: "destructive",
-        });
+      if (!user?._id || !companyId) {
+        return;
       }
 
       setPageLoading(true);
 
       try {
         const res = await getDashboardPage(
-          user?._id,
-          user?.companyId?._id || user?.createdBy?._id
+          user._id,
+          companyId
         );
 
         if (res.status === 200) {
@@ -446,7 +437,7 @@
 
         {/* SUPER ADMIN */}
         {user?.role === "super_admin" && (
-          <CompanyList />
+          <SuperAdminDashboard />
         )}
 
         {user?.role !== "super_admin" && (

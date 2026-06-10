@@ -15,7 +15,18 @@ async function enforceModuleEntitlement(req, res, moduleName) {
     return req.user?.role === "super_admin";
   }
 
-  const result = await checkEntitlement(organizationId, featureKey);
+  let result;
+  try {
+    result = await checkEntitlement(organizationId, featureKey);
+  } catch (error) {
+    console.error("entitlement check error:", error);
+    res.status(503).json({
+      code: "ENTITLEMENT_CHECK_UNAVAILABLE",
+      message: "Unable to verify plan entitlements",
+    });
+    return false;
+  }
+
   if (result.allowed) {
     return true;
   }

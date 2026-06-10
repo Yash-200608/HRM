@@ -5,6 +5,8 @@
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { attachCsrfHeader, captureCsrfTokenFromResponse } from "@/lib/csrf";
+import { handleUnauthorized } from "@/lib/session";
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL;
 axios.defaults.withCredentials = true;
@@ -35,16 +37,24 @@ if (!(window as any).__axiosInterceptorAdded) {
         config.headers.Authorization = `Bearer ${token}`;
       }
 
+      config.headers = attachCsrfHeader(
+        config.headers as Record<string, unknown>,
+        config.method,
+      ) as typeof config.headers;
+
       return config;
     },
     (error) => Promise.reject(error),
   );
 
   axios.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      captureCsrfTokenFromResponse(response.headers as Record<string, unknown>);
+      return response;
+    },
     (error) => {
-      if (error?.response?.status === 401) {
-        console.log("Unauthorized request ❌");
+      if (error?.response?.status === 401 && !error?.config?.skipAuthRedirect) {
+        handleUnauthorized();
       }
       return Promise.reject(error);
     },
@@ -220,6 +230,31 @@ export const loginAdmin = async (email, password) => {
 export const logoutSession = async () => {
   const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/logout`);
 
+  return res;
+};
+
+export const validateSession = async () => {
+  const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/auth/session`, {
+    skipAuthRedirect: true,
+  } as any);
+
+  return res;
+};
+
+export const getActiveSessions = async () => {
+  const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/auth/sessions`);
+  return res;
+};
+
+export const revokeAuthSession = async (sessionId: string) => {
+  const res = await axios.delete(
+    `${import.meta.env.VITE_API_URL}/api/auth/sessions/${sessionId}`,
+  );
+  return res;
+};
+
+export const revokeOtherAuthSessions = async () => {
+  const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/auth/sessions/others`);
   return res;
 };
 
@@ -668,6 +703,43 @@ export const UpdateLeave = async (obj) => {
   const res = await axios.patch(
     `${import.meta.env.VITE_API_URL}/api/company/update/Leave`,
     obj,
+  );
+
+  return res;
+};
+
+export const getRolesList = async (companyId: string) => {
+  const res = await axios.get(
+    `${import.meta.env.VITE_API_URL}/api/assignroles/list/${companyId}`,
+  );
+
+  return res;
+};
+
+export const assignEmployeeRole = async (
+  employeeId: string,
+  roleId: string | null,
+) => {
+  const res = await axios.patch(
+    `${import.meta.env.VITE_API_URL}/api/employees/assign-role`,
+    { employeeId, roleId: roleId || null },
+  );
+
+  return res;
+};
+
+export const getUserPreferences = async () => {
+  const res = await axios.get(
+    `${import.meta.env.VITE_API_URL}/api/auth/preferences`,
+  );
+
+  return res;
+};
+
+export const updateUserPreferences = async (preferences: Record<string, unknown>) => {
+  const res = await axios.patch(
+    `${import.meta.env.VITE_API_URL}/api/auth/preferences`,
+    { preferences },
   );
 
   return res;
@@ -1386,6 +1458,15 @@ export const getBillingOverview = async () => {
   return axios.get(`${import.meta.env.VITE_API_URL}/api/billing/overview`);
 };
 
+export const submitEnterpriseInquiry = async (payload: {
+  contactName: string;
+  contactEmail: string;
+  message: string;
+  companySize?: string;
+}) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/billing/enterprise-inquiry`, payload);
+};
+
 export const upgradeBillingPlan = async (planCode: string) => {
   return axios.patch(
     `${import.meta.env.VITE_API_URL}/api/billing/upgrade`,
@@ -1464,6 +1545,19 @@ export const confirmPasswordReset = async (token: string, newPassword: string) =
 export const verifyMfaLogin = async (mfaChallengeToken: string, code: string) => {
   return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/verify-login`, {
     mfaChallengeToken,
+    code,
+  });
+};
+
+export const setupMfaEnrollment = async (mfaEnrollmentToken: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/enroll/setup`, {
+    mfaEnrollmentToken,
+  });
+};
+
+export const enableMfaEnrollment = async (mfaEnrollmentToken: string, code: string) => {
+  return axios.post(`${import.meta.env.VITE_API_URL}/api/auth/mfa/enroll/enable`, {
+    mfaEnrollmentToken,
     code,
   });
 };

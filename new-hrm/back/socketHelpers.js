@@ -1,23 +1,95 @@
 const { Server } = require("socket.io");
-const Notification = require("./models/personalOffice/NotificationModel"); // Notification model
+const jwt = require("jsonwebtoken");
+const Notification = require("./models/personalOffice/NotificationModel");
 const Department = require("./models/personalOffice/departmentModel.js");
-const { Employee } = require("./models/personalOffice/employeeModel"); // adjust path if needed
-const { insertOne } = require("./models/personalOffice/SubtaskModel");
+const { Employee } = require("./models/personalOffice/employeeModel");
+const { validateJwtClaims } = require("@hrm-subscription/shared-auth");
+const { resolveSocketCorsOrigins } = require("./config/corsConfig.js");
 
 let io;
+
+function parseCookieHeader(cookieHeader = "") {
+  return Object.fromEntries(
+    cookieHeader
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        if (separatorIndex === -1) {
+          return [part, ""];
+        }
+
+        const key = part.slice(0, separatorIndex);
+        const value = part.slice(separatorIndex + 1);
+        return [key, decodeURIComponent(value)];
+      })
+  );
+}
+
+function extractSocketToken(socket) {
+  const authToken = socket.handshake.auth?.token;
+  if (authToken) {
+    return authToken;
+  }
+
+  const authorization = socket.handshake.headers?.authorization;
+  if (authorization?.startsWith("Bearer ")) {
+    return authorization.split(" ")[1];
+  }
+
+  const cookies = parseCookieHeader(socket.handshake.headers?.cookie || "");
+  if (cookies.accessToken) {
+    return cookies.accessToken;
+  }
+
+  return null;
+}
 
 function initSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: ["http://localhost:8080", "http://localhost:8081"],
+      origin: resolveSocketCorsOrigins(),
+      credentials: true,
     },
     maxHttpBufferSize: 1e8,
+  });
+
+  io.use((socket, next) => {
+    try {
+      const token = extractSocketToken(socket);
+
+      if (!token) {
+        return next(new Error("Authentication required"));
+      }
+
+      const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+      const claimValidation = validateJwtClaims(decoded);
+
+      if (!claimValidation.valid) {
+        return next(new Error("Invalid token claims"));
+      }
+
+      socket.user = {
+        id: String(decoded.id),
+        role: decoded.role,
+        companyId: claimValidation.claims.orgId || claimValidation.claims.companyId || null,
+      };
+
+      return next();
+    } catch (error) {
+      return next(new Error("Invalid token"));
+    }
   });
 
   io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
 
     socket.on("joinRoom", (roomId) => {
+      if (String(roomId) !== socket.user.id) {
+        return;
+      }
+
       const room = roomId?.toString();
       if (!socket.rooms.has(room)) {
         socket.join(room);
@@ -42,7 +114,7 @@ function initSocket(server) {
       io.emit("departmentRefresh", departmentData);
     });
 
-    socket.on("addProjectRefresh", (projectId) => {
+    socket.on("addProjectRefresh", () => {
       io.emit("getProjectRefresh");
     });
 
@@ -70,26 +142,24 @@ function initSocket(server) {
       const employeeData = await Employee.findById(employeeId)
         .populate("createdBy", "name logo")
         .populate("department", "name managers")
-        .select("+password");
+        .select("-password");
       io.emit("getDepartmentRefresh", employeeData);
     });
     socket.on("addRelieveRefresh", (employeeId) => {
-      console.log(employeeId);
       io.emit("getRelieveRefresh", employeeId);
     });
 
     socket.on(
       "updateManagerRefreshForFrontend",
       async ({ selectedEmployee, oldEmployee }) => {
-        // same room me sabko notify karo
         const employeeData = await Employee.findById(selectedEmployee)
           .populate("createdBy", "name logo")
           .populate("department", "name managers")
-          .select("+password");
+          .select("-password");
         const oldEmployeeData = await Employee.findById(oldEmployee)
           .populate("createdBy", "name logo")
           .populate("department", "name managers")
-          .select("+password");
+          .select("-password");
         io.emit("updateManagerRefresh", {
           newManager: employeeData,
           oldManager: oldEmployeeData,
@@ -112,16 +182,6 @@ function getIO() {
   return io;
 }
 
-/**
- * Send notification: save in DB and emit via socket
- * @param {string} userId - User ObjectId
- * @param {string} userModel - "Admin" or "Employee"
- * @param {string} companyId - Company ObjectId
- * @param {string} message - Notification message
- * @param {string} type - "task" | "subtask" | "leave" | "general"
- * @param {string|null} referenceId - Related Task/Leave/Subtask ID
- */
-
 async function sendNotification({
   createdBy,
   userId,
@@ -141,24 +201,20 @@ async function sendNotification({
     type,
     referenceId,
   );
-  // if(!createdBy || !userId ||!userModel || !companyId || !message || !type ||  !referenceId) return {message : " required field missing."}
 
   try {
-    // 1️⃣ Save in MongoDB
     const notificationDoc = await Notification.create({
       userId,
-      userModel, // required
-      companyId, // required
+      userModel,
+      companyId,
       message,
       type,
       referenceId,
       createdBy,
     });
 
-    // Populate createdBy for frontend display
     const notification = await notificationDoc.populate("createdBy");
 
-    // 2️⃣ Emit via socket to the user
     io.to(userId.toString()).emit("newNotification", notification);
 
     console.log("Notification sent:", notification);

@@ -1055,6 +1055,8 @@ const consumeOAuthSession = async (req, res) => {
     const accessToken = generateAccessToken(
       await buildAccessTokenInput(account.user, { accountType: account.accountType })
     );
+    const { setAccessTokenCookie } = require("./sessionSecurityService.js");
+    setAccessTokenCookie(res, accessToken);
     res.clearCookie(OAUTH_SESSION_COOKIE, clearCookieOptions());
     return res.status(200).json({
       message: "Login successful",

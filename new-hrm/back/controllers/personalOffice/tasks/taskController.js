@@ -107,15 +107,10 @@ const createTask = async (req, res) => {
   try {
     const { companyId, projectId, createdBy, createdByRole, managerId, name, description, remarks, startDate, endDate, priority, status, forceCreate} = req.body;
 
-
-    console.log("BODY", req.body);
-
 const adminUser = await Admin.findOne({
   _id: createdBy,
   companyId
 });
-
-console.log("ADMIN USER", adminUser);
 
 const employeeUser = await Employee.findOne({
   _id: createdBy,
@@ -123,9 +118,6 @@ const employeeUser = await Employee.findOne({
 })
 .populate("department")
 .populate("assignedRole");
-
-console.log("EMPLOYEE USER", employeeUser);
-
 
     await validateCompanyAndProject(companyId, projectId);
     await validateCreator(createdBy, createdByRole);

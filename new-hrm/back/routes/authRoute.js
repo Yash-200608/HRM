@@ -1,7 +1,7 @@
 
 const express = require("express");
 const { registerAdmin, updateAdmin, deleteAdmin, loginAdmin, getUserById, updateUser, changePassword,
-  getAllAdmins, adminStatusChange, refresh, logout, getUserWeeklyAttendanceReport, getDashboardSummary, analyticsReport, getNotificationData, deleteNotifications, deleteAllNotifications, markAsReadNotifications } = require("../controllers/personalOffice/authController");
+  getAllAdmins, adminStatusChange, refresh, logout, getSession, getUserWeeklyAttendanceReport, getDashboardSummary, analyticsReport, getNotificationData, deleteNotifications, deleteAllNotifications, markAsReadNotifications, getUserPreferences, updateUserPreferences, listActiveSessions, revokeSessionById, revokeOtherSessions } = require("../controllers/personalOffice/authController");
 const {
   startOAuth,
   startOAuthLink,
@@ -17,6 +17,11 @@ const {
 } = require("../service/oauthService.js");
 
 const authMiddleware = require("../middleware/authMiddleware.js");
+const requireCompanyTenant = require("../middleware/requireCompanyTenant.js");
+const {
+  authLoginLimiter,
+  passwordResetLimiter,
+} = require("../middleware/rateLimit.js");
 const {
   requestPasswordResetHandler,
   confirmPasswordResetHandler,
@@ -25,6 +30,8 @@ const {
   disableMfaHandler,
   regenerateRecoveryCodesHandler,
   verifyMfaLoginHandler,
+  setupMfaEnrollmentHandler,
+  enableMfaEnrollmentHandler,
 } = require("../controllers/personalOffice/securityController.js");
 
 const router = express.Router();
@@ -74,7 +81,7 @@ const router = express.Router();
  *       500:
  *         description: Server error
  */
-router.post("/register", registerAdmin);
+router.post("/register", authMiddleware, registerAdmin);
 
 /**
  * @swagger
@@ -106,14 +113,32 @@ router.post("/register", registerAdmin);
  *       500:
  *         description: Server error
  */
-router.post("/login", loginAdmin);
-router.post("/password-reset/request", requestPasswordResetHandler);
-router.post("/password-reset/confirm", confirmPasswordResetHandler);
+router.post("/login", authLoginLimiter, loginAdmin);
+router.post("/password-reset/request", passwordResetLimiter, requestPasswordResetHandler);
+router.post("/password-reset/confirm", passwordResetLimiter, confirmPasswordResetHandler);
 router.post("/mfa/verify-login", verifyMfaLoginHandler);
+router.post("/mfa/enroll/setup", setupMfaEnrollmentHandler);
+router.post("/mfa/enroll/enable", enableMfaEnrollmentHandler);
 router.post("/mfa/setup", authMiddleware, setupMfaHandler);
 router.post("/mfa/enable", authMiddleware, enableMfaHandler);
 router.post("/mfa/disable", authMiddleware, disableMfaHandler);
 router.post("/mfa/recovery-codes/regenerate", authMiddleware, regenerateRecoveryCodesHandler);
+router.get("/oauth/config", (req, res) => {
+  const googleEnabled = Boolean(
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+  );
+  const microsoftEnabled = Boolean(
+    process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET
+  );
+
+  return res.status(200).json({
+    data: {
+      google: googleEnabled,
+      microsoft: microsoftEnabled,
+      enabled: googleEnabled || microsoftEnabled,
+    },
+  });
+});
 router.get("/google", startOAuth("google"));
 router.post("/oauth/link/google", startOAuthLink("google"));
 router.get("/google/callback", handleOAuthCallback("google"));
@@ -130,20 +155,26 @@ router.post("/oauth/incident/force-logout-all", forceLogoutAllOAuthSessions);
 router.post("/oauth/incident/force-reauth", forceOAuthReauthentication);
 router.post("/refreshtoken", refresh);
 router.post("/logout", logout);
-router.put("/update/:id", updateAdmin);
-router.delete("/delete", deleteAdmin);
-router.get("/get/:id", getAllAdmins);
-router.get("/getbyid", getUserById)
-router.patch("/updateuser", updateUser);
-router.post("/updatepassword", changePassword);
-router.get("/dashboardsummary", getDashboardSummary);
-router.get("/report", analyticsReport);
-router.get("/notification", getNotificationData);
-router.put("/notification/read", markAsReadNotifications);
-router.delete("/notification/delete", deleteNotifications);
-router.delete("/notification/alldelete", deleteAllNotifications);
-router.put("/admin/status", adminStatusChange);
-router.get("/weekly-attendance-report", getUserWeeklyAttendanceReport);
+router.get("/session", authMiddleware, getSession);
+router.get("/sessions", authMiddleware, listActiveSessions);
+router.delete("/sessions/others", authMiddleware, revokeOtherSessions);
+router.delete("/sessions/:sessionId", authMiddleware, revokeSessionById);
+router.put("/update/:id", authMiddleware, updateAdmin);
+router.delete("/delete", authMiddleware, deleteAdmin);
+router.get("/get/:id", authMiddleware, getAllAdmins);
+router.get("/getbyid", authMiddleware, getUserById);
+router.patch("/updateuser", authMiddleware, updateUser);
+router.post("/updatepassword", authMiddleware, changePassword);
+router.get("/dashboardsummary", authMiddleware, getDashboardSummary);
+router.get("/report", authMiddleware, requireCompanyTenant, analyticsReport);
+router.get("/notification", authMiddleware, getNotificationData);
+router.put("/notification/read", authMiddleware, markAsReadNotifications);
+router.delete("/notification/delete", authMiddleware, deleteNotifications);
+router.delete("/notification/alldelete", authMiddleware, deleteAllNotifications);
+router.put("/admin/status", authMiddleware, adminStatusChange);
+router.get("/weekly-attendance-report", authMiddleware, requireCompanyTenant, getUserWeeklyAttendanceReport);
+router.get("/preferences", authMiddleware, getUserPreferences);
+router.patch("/preferences", authMiddleware, updateUserPreferences);
 
 
 

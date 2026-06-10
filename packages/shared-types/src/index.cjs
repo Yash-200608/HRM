@@ -49,6 +49,7 @@ const ENTITLEMENT_KEYS = Object.freeze([
   "recruitment",
   "performanceReviews",
   "assetManagement",
+  "learningManagement",
   "apiAccess",
   "workflowAutomation",
   "customBranding",
@@ -97,7 +98,7 @@ const HRM_MODULE_TO_ENTITLEMENT = Object.freeze({
   holiday: "leaveManagement",
   performance: "performanceReviews",
   assets: "assetManagement",
-  learning: "workflowAutomation",
+  learning: "learningManagement",
 });
 
 const COMPANY_STATUS_VALUES = Object.freeze(["ACTIVE", "SUSPENDED", "ARCHIVED", "PURGED"]);

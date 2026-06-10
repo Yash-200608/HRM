@@ -27,6 +27,7 @@ const featureKeys = [
   'recruitment',
   'performanceReviews',
   'assetManagement',
+  'learningManagement',
   'apiAccess',
   'workflowAutomation',
   'customBranding',

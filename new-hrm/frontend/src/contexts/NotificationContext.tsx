@@ -53,7 +53,9 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
     // Initial fetch
     refreshNotifications();
 
-    const socketClient: Socket = io(import.meta.env.VITE_API_URL);
+    const socketClient: Socket = io(import.meta.env.VITE_API_URL, {
+      withCredentials: true,
+    });
     setSocket(socketClient);
 
     // Join user-specific room

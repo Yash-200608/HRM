@@ -34,7 +34,7 @@ const MODULE_TO_ENTITLEMENT: Record<string, string> = {
   holiday: "leaveManagement",
   performance: "performanceReviews",
   assets: "assetManagement",
-  learning: "workflowAutomation",
+  learning: "learningManagement",
 };
 
 export function resolveModuleEntitlement(moduleName?: string | null) {
@@ -128,6 +128,24 @@ export function readEntitlementsFromAccessToken(): {
   entitlements: string[];
   subscriptionPlan: string | null;
 } {
+  try {
+    const rawUser = localStorage.getItem("user");
+    if (rawUser) {
+      const storedUser = JSON.parse(rawUser) as {
+        entitlements?: string[];
+        subscriptionPlan?: string | null;
+      };
+      if (storedUser.entitlements?.length || storedUser.subscriptionPlan) {
+        return {
+          entitlements: Array.isArray(storedUser.entitlements) ? storedUser.entitlements : [],
+          subscriptionPlan: storedUser.subscriptionPlan ? String(storedUser.subscriptionPlan) : null,
+        };
+      }
+    }
+  } catch {
+    // fall through to legacy token parsing
+  }
+
   const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
   if (!token) {
     return { entitlements: [], subscriptionPlan: null };

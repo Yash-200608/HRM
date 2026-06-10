@@ -51,16 +51,15 @@ const OAuthCallback = () => {
           withCredentials: true,
         });
 
-        const token = res?.data?.accessToken;
         const user = res?.data?.user;
 
-        if (!token || !user) {
+        if (!user) {
           throw new Error("Invalid OAuth session");
         }
 
-        localStorage.setItem("accessToken", token);
+        localStorage.removeItem("accessToken");
         localStorage.setItem("user", JSON.stringify(user));
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        delete axios.defaults.headers.common["Authorization"];
         dispatch(getLoginUser(user));
 
         toast({

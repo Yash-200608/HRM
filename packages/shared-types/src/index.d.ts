@@ -49,6 +49,7 @@ export type EntitlementKey =
   | "recruitment"
   | "performanceReviews"
   | "assetManagement"
+  | "learningManagement"
   | "apiAccess"
   | "workflowAutomation"
   | "customBranding"

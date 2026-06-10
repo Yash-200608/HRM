@@ -4,92 +4,61 @@ const PdfLetter = require(
   "../../models/personalOffice/letterModel"
 );
 
-const { Admin } = require(
-  "../../models/personalOffice/authModel"
-);
-
 const { Employee } = require(
   "../../models/personalOffice/employeeModel"
 );
+
+const {
+  assertSameCompany,
+  isSelf,
+  resolveEffectiveCompanyId,
+} = require("../../utils/authAccess.js");
 
 exports.uploadLetter = async (
   req,
   res
 ) => {
-
   try {
-
     const {
       employeeId,
-      companyId,
-      adminId,
       letterType,
     } = req.body;
 
-    // CHECK USER
+    const companyId = resolveEffectiveCompanyId(req, req.body.companyId);
+    const actorId = req.user.id;
 
-     console.log("BODY =>", req.body);
-    console.log("FILE =>", req.file);
-
-    let user =
-      await Admin.findOne({
-        _id: adminId,
-        companyId,
-      });
-
-    if (!user) {
-
-      user =
-        await Employee.findOne({
-          _id: adminId,
-          createdBy: companyId,
-        }).populate(
-          "assignedRole"
-        );
-    }
-
-    if (!user) {
-
-      return res.status(403).json({
-        message: "Unauthorized",
+    if (!companyId || !employeeId || !letterType) {
+      return res.status(400).json({
+        message: "companyId, employeeId and letterType are required",
       });
     }
 
-    // PERMISSION CHECK
-
-    let hasPermission = false;
-
-    if (user.role === "admin") {
-
-      hasPermission = true;
-
-    } else {
-
-      const permissions =
-        user?.assignedRole
-          ?.permissions || {};
-
-      hasPermission =
-        permissions?.employees
-          ?.edit === true;
+    if (!assertSameCompany(req, res, companyId)) {
+      return;
     }
 
-    if (!hasPermission) {
+    const employee = await Employee.findOne({
+      _id: employeeId,
+      createdBy: companyId,
+    });
 
+    if (!employee) {
+      return res.status(404).json({
+        message: "Employee not found",
+      });
+    }
+
+    if (req.user.role !== "admin" && !isSelf(req.user, employeeId)) {
       return res.status(403).json({
-        message:
-          "No permission to upload letters",
+        message: "No permission to upload letters",
       });
     }
 
     if (!req.file) {
-
       return res.status(400).json({
         message: "PDF required",
       });
     }
-
-    // DELETE OLD FILE
 
     const existingLetter =
       await PdfLetter.findOne({
@@ -104,7 +73,6 @@ exports.uploadLetter = async (
           existingLetter.pdfUrl
       )
     ) {
-
       fs.unlinkSync(
         "." +
           existingLetter.pdfUrl
@@ -114,10 +82,7 @@ exports.uploadLetter = async (
     const pdfUrl =
       `/uploads/letters/${req.file.filename}`;
 
-    // UPDATE OR CREATE
-
     if (existingLetter) {
-
       existingLetter.pdfUrl =
         pdfUrl;
 
@@ -128,16 +93,14 @@ exports.uploadLetter = async (
         req.file.size;
 
       existingLetter.uploadedBy =
-        adminId;
+        actorId;
 
       await existingLetter.save();
-
     } else {
-
       await PdfLetter.create({
         employeeId,
         companyId,
-        uploadedBy: adminId,
+        uploadedBy: actorId,
         letterType,
         pdfUrl,
         originalName:
@@ -151,9 +114,7 @@ exports.uploadLetter = async (
       message:
         "Letter uploaded successfully",
     });
-
   } catch (error) {
-
     console.log(error);
 
     return res.status(500).json({
@@ -165,21 +126,56 @@ exports.uploadLetter = async (
 
 exports.getEmployeeLetters = async (req, res) => {
   try {
-
     const { employeeId } = req.query;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
+
+    if (!employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "employeeId is required",
+      });
+    }
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId is required",
+      });
+    }
+
+    if (!assertSameCompany(req, res, companyId)) {
+      return;
+    }
+
+    const employee = await Employee.findOne({
+      _id: employeeId,
+      createdBy: companyId,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    if (req.user.role !== "admin" && !isSelf(req.user, employeeId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
 
     const letters = await PdfLetter.find({
-      employeeId: employeeId,
+      employeeId,
+      companyId,
     });
-console.log("EMPLOYEE ID", employeeId);
-console.log("LETTERS", letters);
+
     return res.status(200).json({
       success: true,
       letters,
     });
-
   } catch (error) {
-
     console.log(error);
 
     return res.status(500).json({

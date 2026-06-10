@@ -1,6 +1,10 @@
 const express = require("express");
 const router = express.Router();
 
+const authMiddleware = require("../middleware/authMiddleware");
+const requireSuperAdmin = require("../middleware/requireSuperAdmin");
+const requireCompanyTenant = require("../middleware/requireCompanyTenant");
+
 const {
   addCompany,
   getCompanies,
@@ -11,42 +15,53 @@ const {
   getCompanyDepartments,
   getCompaniesFromDashboard,
   getCompanyDetail,
-  updateCompanyLeave
+  updateCompanyLeave,
 } = require("../controllers/personalOffice/companyController");
 const upload = require("../middleware/upload.js");
 
-// ---------------- Create Company ----------------
-// POST /api/companies/add
-router.post("/add", upload.fields([{ name: "logo", maxCount: 1 }]), addCompany);
+router.post(
+  "/add",
+  authMiddleware,
+  requireSuperAdmin,
+  upload.fields([{ name: "logo", maxCount: 1 }]),
+  addCompany
+);
 
-// ---------------- Get All Companies ----------------
-// GET /api/companies/
-// Optional query param: ?adminId=<id>
-router.get("/:id", getCompanies);
+router.get("/:id", authMiddleware, requireSuperAdmin, getCompanies);
 
-// ---------------- Get Company by ID ----------------
-// GET /api/companies/:id
-router.get("/:id", getCompanyById);
+router.get(
+  "/detail/company",
+  authMiddleware,
+  requireCompanyTenant,
+  getCompanyDetail
+);
 
-router.get("/detail/company", getCompanyDetail);
-router.patch("/update/Leave", updateCompanyLeave);
+router.patch(
+  "/update/Leave",
+  authMiddleware,
+  requireCompanyTenant,
+  updateCompanyLeave
+);
 
-// ---------------- Update Company ----------------
-// PUT /api/companies/:id
-router.put("/:id", upload.fields([{ name: "logo", maxCount: 1 }]), updateCompany);
+router.put(
+  "/:id",
+  authMiddleware,
+  requireSuperAdmin,
+  upload.fields([{ name: "logo", maxCount: 1 }]),
+  updateCompany
+);
 
-// ---------------- Delete Company ----------------
-// DELETE /api/companies/:id
-router.delete("/:id", deleteCompany);
+router.delete("/:id", authMiddleware, requireSuperAdmin, deleteCompany);
 
-// ---------------- Assign Admin to Company ----------------
-// POST /api/companies/assign-admin
-router.post("/assign-admin", assignAdmin);
+router.post("/assign-admin", authMiddleware, requireSuperAdmin, assignAdmin);
 
-// ---------------- Add Department to Company ----------------
-// POST /api/companies/add-department
-router.post("/add-department", getCompanyDepartments);
+router.post("/add-department", authMiddleware, requireSuperAdmin, getCompanyDepartments);
 
-router.get("/company/dashboard/:id", getCompaniesFromDashboard)
+router.get(
+  "/company/dashboard/:id",
+  authMiddleware,
+  requireSuperAdmin,
+  getCompaniesFromDashboard
+);
 
 module.exports = router;

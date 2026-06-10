@@ -15,7 +15,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useNotifications } from "@/contexts/NotificationContext";
-import { headingManage } from "@/services/allFunctions";
+import { useTranslation } from "react-i18next";
+import { resolveHeadingKeys } from "@/i18n/headingKeys";
 import * as Icons from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
@@ -37,8 +38,11 @@ const Header: React.FC<HeaderProps> = ({ taskName, activeSidebar, taskSubPage, j
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
   const location = useLocation();
-  const data = headingManage(location.pathname, user?.role);
+  const { t } = useTranslation();
+  const data = resolveHeadingKeys(location.pathname, user?.role);
   const IconComponent = Icons[data?.icon as keyof typeof Icons] as React.ComponentType<LucideProps>;
+  const title = t(data.titleKey);
+  const description = t(data.descriptionKey);
 
   return (
     <header className="sticky top-0 z-20 bg-card border-b border-border px-4 lg:px-6 py-3">
@@ -76,11 +80,11 @@ const Header: React.FC<HeaderProps> = ({ taskName, activeSidebar, taskSubPage, j
             <div className="flex flex-col justify-center leading-tight min-w-0">
 
               <p className="text-sm md:text-base font-semibold truncate">
-                {data?.title}
+                {title}
               </p>
 
               <p className="text-xs md:text-sm text-muted-foreground truncate">
-                {data?.description?.length > 25 ? data.description.substring(0, 25) + "..." : data.description}
+                {description.length > 25 ? `${description.substring(0, 25)}...` : description}
               </p>
 
             </div>
@@ -132,28 +136,28 @@ const Header: React.FC<HeaderProps> = ({ taskName, activeSidebar, taskSubPage, j
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("common.myAccount")}</DropdownMenuLabel>
               <DropdownMenuSeparator />
             {user?.role === "employee" && (
   <DropdownMenuItem
     className="cursor-pointer"
     onClick={() => navigate("/profile")}
   >
-    Profile
+    {t("common.profile")}
   </DropdownMenuItem>
 )}
               <DropdownMenuItem
                 className="cursor-pointer"
                 onClick={() => navigate("/setting")}
               >
-                Settings
+                {t("common.settings")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive cursor-pointer"
                 onClick={logout}
               >
-                Logout
+                {t("common.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

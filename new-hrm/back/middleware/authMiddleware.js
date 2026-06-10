@@ -17,6 +17,10 @@ const {
   denyReadOnlyTenant,
   shouldBypassWritableCheck,
 } = require("./requireWritableTenant.js");
+const {
+  findActiveSession,
+  touchSession,
+} = require("../service/authSessionService.js");
 
 async function resolveAuthenticatedUser(decoded) {
   const superAdmin = await SuperAdmin.findById(decoded.id);
@@ -60,15 +64,15 @@ function resolveCompanyId(user, decoded) {
   );
 }
 
+const { getAccessTokenFromRequest } = require("../service/sessionSecurityService.js");
+
 const authMiddleware = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    const token = getAccessTokenFromRequest(req);
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!token) {
       return res.status(401).json({ message: "No token provided" });
     }
-
-    const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     const claimValidation = validateJwtClaims(decoded);
 
@@ -87,6 +91,14 @@ const authMiddleware = async (req, res, next) => {
 
     if (isAccessTokenInvalidated(decoded, user)) {
       return res.status(401).json({ message: "Session invalidated" });
+    }
+
+    if (claimValidation.claims.sessionId && !claimValidation.isLegacy) {
+      const activeSession = await findActiveSession(claimValidation.claims.sessionId);
+      if (!activeSession) {
+        return res.status(401).json({ message: "Session revoked" });
+      }
+      await touchSession(claimValidation.claims.sessionId);
     }
 
     const companyId = resolveCompanyId(user, claimValidation.claims);

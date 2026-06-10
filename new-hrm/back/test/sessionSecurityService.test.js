@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { afterEach, test } = require("node:test");
 const jwt = require("jsonwebtoken");
 const {
+  ACCESS_TOKEN_COOKIE,
   OAUTH_SESSION_COOKIE,
   REFRESH_TOKEN_COOKIE,
   clearAuthCookies,
@@ -120,7 +121,7 @@ test("auth cookie clearing invalidates refresh and pending OAuth session cookies
 
   assert.deepEqual(
     cleared.map((item) => item.name),
-    [REFRESH_TOKEN_COOKIE, OAUTH_SESSION_COOKIE],
+    [REFRESH_TOKEN_COOKIE, ACCESS_TOKEN_COOKIE, OAUTH_SESSION_COOKIE],
   );
   assert.ok(cleared.every((item) => item.options.httpOnly === true));
   assert.ok(cleared.every((item) => item.options.path === "/"));

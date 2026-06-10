@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route, Navigate, useNavigate, BrowserRouter } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { PreferencesProvider } from "@/contexts/PreferencesContext";
 import MainLayout from "@/components/layout/MainLayout";
 import Login from "@/pages/Login";
 import AdminLogin from "@/pages/AdminLogin";
@@ -48,6 +49,8 @@ import { useEffect } from "react";
 export { };
 import Roles from "./pages/Roles";
 import PermissionRoute from "./components/PermissionRoute"
+import EmployeePerformanceRoute from "./components/EmployeePerformanceRoute";
+import EmployeeProfileRoute from "./components/EmployeeProfileRoute";
 import MyAccount from "./pages/MyAccount";
 import Resignation from "./pages/Resignation";
 import ResignationManagement from "./pages/ResignationManagement";
@@ -84,32 +87,46 @@ const queryClient = new QueryClient({
 
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, initializing } = useAuth();
+
+  if (initializing) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-primary" />
+      </div>
+    );
+  }
+
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 const AppRoutes = () => {
-  const {user} = useAuth();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated, initializing } = useAuth();
   const navigate = useNavigate();
   window.reactRouterNavigate = navigate;
 
-  useEffect(()=>{
-     if(user?._id){
-      socket.connect();
-      socket.emit("joinRoom", user?._id);
-     }
-  })
+  useEffect(() => {
+    if (!user?._id) {
+      return;
+    }
+
+    socket.connect();
+    socket.emit("joinRoom", user._id);
+
+    return () => {
+      socket.off("joinRoom");
+    };
+  }, [user?._id]);
   
   return (
     <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
-      <Route path="/admin/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <AdminLogin />} />
-      <Route path="/superAdmin/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <SuperAdminLogin />} />
+      <Route path="/login" element={initializing ? null : isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/admin/login" element={initializing ? null : isAuthenticated ? <Navigate to="/dashboard" replace /> : <AdminLogin />} />
+      <Route path="/superAdmin/login" element={initializing ? null : isAuthenticated ? <Navigate to="/dashboard" replace /> : <SuperAdminLogin />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+      <Route path="/" element={initializing ? null : <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
 
      <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
 
@@ -138,8 +155,22 @@ element={
     </PermissionRoute>
   }
 />
-<Route path="/user/:id" element={<EmployeeDashboard />} />
-<Route path="resignation/manage" element={<ResignationManagement />} />
+<Route
+  path="/user/:id"
+  element={
+    <EmployeeProfileRoute>
+      <EmployeeDashboard />
+    </EmployeeProfileRoute>
+  }
+/>
+<Route
+  path="resignation/manage"
+  element={
+    <PermissionRoute module="Resignation" action="edit">
+      <ResignationManagement />
+    </PermissionRoute>
+  }
+/>
 <Route
   path="/users"
   element={
@@ -153,11 +184,24 @@ element={
   }
 />
 
-<Route path="/reports-monthly-attendance" element={<MonthlyAttendanceReport />} />
+<Route
+  path="/reports-monthly-attendance"
+  element={
+    <PermissionRoute module="attendancereport" action="view">
+      <MonthlyAttendanceReport />
+    </PermissionRoute>
+  }
+/>
 
 <Route
-path="/companies"
-element={<Companies />}
+  path="/companies"
+  element={
+    user?.role === "super_admin" ? (
+      <Companies />
+    ) : (
+      <Navigate to="/dashboard" replace />
+    )
+  }
 />
 
 <Route
@@ -295,9 +339,9 @@ element={
 <Route
   path="/my-performance"
   element={
-    <PermissionRoute module="performance" action="view">
+    <EmployeePerformanceRoute>
       <MyPerformance />
-    </PermissionRoute>
+    </EmployeePerformanceRoute>
   }
 />
 
@@ -382,14 +426,16 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
      <BrowserRouter basename="/">
     <AuthProvider>
-      <NotificationProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-         
+      <PreferencesProvider>
+        <NotificationProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+
             <AppRoutes />
-        </TooltipProvider>
-      </NotificationProvider>
+          </TooltipProvider>
+        </NotificationProvider>
+      </PreferencesProvider>
     </AuthProvider>
     </BrowserRouter>
   </QueryClientProvider>

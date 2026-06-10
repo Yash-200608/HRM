@@ -18,6 +18,13 @@ const {
 } = require("../../service/employeeLifecycleEventService.js");
 const { checkCanAddEmployee } = require("../../service/employeeLimitService.js");
 const { recordAuditEvent } = require("../../service/auditService.js");
+const { issueAuthCookies } = require("../../service/sessionSecurityService.js");
+const { resolveEffectiveCompanyId } = require("../../utils/authAccess.js");
+const { issueAuthenticatedSession } = require("../../service/authLoginService.js");
+const {
+  recordLoginFailure,
+  recordSecurityAudit,
+} = require("../../service/securityAuditService.js");
 
 
 
@@ -194,7 +201,14 @@ console.log("========= EMPLOYEE SAVED =========");
         status: employee.status,
       },
     });
-    await recentActivity.create({ title: "New Employee Added.", createdBy: userId, createdByRole: "Admin", companyId: organizationId || companyId })
+    await recentActivity.create({ title: "New Employee Added.", createdBy: userId, createdByRole: "Admin", companyId: organizationId || companyId });
+
+    await recordSecurityAudit("auth.user.created", req, {
+      resourceType: "employee",
+      resourceId: employee._id,
+      companyId: organizationId || companyId,
+      metadata: { email: employee.email },
+    });
 
     return res.status(201).json({
       message: "Employee added successfully",
@@ -226,7 +240,6 @@ console.log("========= FULL ERROR =========");
 const loginEmployee = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("data", req.body)
 
     // 1️⃣ Required fields check
     if (!email || !password) {
@@ -239,10 +252,12 @@ const loginEmployee = async (req, res) => {
       .select("+password");
 
     if (!user) {
+      await recordLoginFailure(req, { email, reason: "invalid_email", accountType: "employee" });
       return res.status(400).json({ message: "Invalid email" });
     }
 
     if (user.status === "RELIEVED") {
+      await recordLoginFailure(req, { email, reason: "inactive_account", accountType: "employee" });
       return res.status(400).json({
         message: "Your account is inactive. Please contact your administrator for assistance."
       });
@@ -251,38 +266,17 @@ const loginEmployee = async (req, res) => {
     // 4️⃣ Password verification
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      await recordLoginFailure(req, { email, reason: "invalid_password", accountType: "employee" });
       return res.status(400).json({ message: "Invalid password" });
     }
 
-    // 5️⃣ Generate Access + Refresh tokens
-    const payload = {
-      id: user._id,
-      role: user.role || "employee",
-      companyId: user.createdBy?._id || null,
-    };
-
-    const subscriptionFields = await buildUserSubscriptionFields(user, { accountType: "employee" });
-    const accessToken = generateAccessToken(subscriptionFields.tokenInput);
-    const refreshToken = generateRefreshToken({ id: user._id });
-
-    // 6️⃣ Save refresh token in DB
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    // 7️⃣ Set refresh token in httpOnly cookie
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false, // set true in production
-      sameSite: "strict",
+    const session = await issueAuthenticatedSession(req, res, user, {
+      accountType: "employee",
     });
 
-    // 8️⃣ Prepare user data for response
-    const userData = user.toObject();
-    delete userData.password;
-
+    const userData = session.userData;
     userData.companyId = user.createdBy || null;
 
-    // 9️⃣ Log recent activity
     await recentActivity.create({
       title: `Welcome, ${user?.fullName}`,
       createdBy: user._id,
@@ -295,13 +289,13 @@ const loginEmployee = async (req, res) => {
     // 🔟 Send response
     return res.status(200).json({
       message: "Login successful",
-      accessToken,
+      accessToken: session.accessToken,
       user: {
         ...userData,
         role: "employee",
         fullName: userData.fullName,
-        entitlements: subscriptionFields.entitlements,
-        subscriptionPlan: subscriptionFields.subscriptionPlan,
+        entitlements: session.subscriptionFields.entitlements,
+        subscriptionPlan: session.subscriptionFields.subscriptionPlan,
       },
     });
 
@@ -314,12 +308,15 @@ const loginEmployee = async (req, res) => {
 
 // ----------------update Reliveve Employee----------
 const updateEmployeeStatus = async (req, res) => {
-  const { adminId, employeeId, companyId, status } = req.body;
+  const { employeeId, status } = req.body;
+  const companyId = req.user.companyId;
   try {
+    if (!companyId) {
+      return res.status(403).json({ message: "Company context is required" });
+    }
+
     const company = await Company.findOne({ _id: companyId });
     if (!company) return res.status(404).json({ message: "Company Not Found." });
-    const admin = await Admin.findOne({ _id: adminId, companyId });
-    if (!admin) return res.status(404).json({ message: "Admin Not FOund." });
     const employee = await Employee.findOne({ _id: employeeId, createdBy: companyId });
     if (!employee) return res.status(404).json({ message: "Employee Not Found." });
 
@@ -383,7 +380,7 @@ const getEmployees = async (req, res) => {
 const getEmployeeById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { companyId } = req.query;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
     let task = null;
 
     if (!companyId) {
@@ -639,41 +636,64 @@ const assignRoleToEmployee = async (req, res) => {
   try {
     const { employeeId, roleId } = req.body;
 
-    if (!employeeId || !roleId) {
+    if (!employeeId) {
       return res.status(400).json({
-        message: "employeeId and roleId required",
+        message: "employeeId is required",
       });
     }
 
     const employee = await Employee.findById(employeeId);
 
     if (!employee) {
-      return res.status(400).json({
+      return res.status(404).json({
         message: "Employee not found",
       });
     }
 
-    const role = await AccessRole.findById(roleId);
+    const userCompanyId = req.user?.companyId?.toString();
 
-    if (!role) {
-      return res.status(400).json({
-        message: "Role not found",
-      });
+    if (req.user?.role !== "super_admin") {
+      if (!userCompanyId || employee.createdBy.toString() !== userCompanyId) {
+        return res.status(403).json({
+          message: "Access denied for this employee",
+        });
+      }
     }
 
-    employee.assignedRole = roleId;
+    let assignedRoleValue = null;
+    let successMessage = "Role removed successfully";
 
-    console.log("========= EMPLOYEE DATA =========");
+    if (roleId) {
+      const role = await AccessRole.findById(roleId);
 
-console.log(employee);
+      if (!role) {
+        return res.status(404).json({
+          message: "Role not found",
+        });
+      }
 
-await employee.save();
+      if (
+        req.user?.role !== "super_admin" &&
+        role.companyId.toString() !== userCompanyId
+      ) {
+        return res.status(403).json({
+          message: "Role does not belong to your company",
+        });
+      }
 
-console.log("========= EMPLOYEE SAVED =========");
+      assignedRoleValue = roleId;
+      successMessage = "Role assigned successfully";
+    }
+
+    await Employee.findByIdAndUpdate(
+      employeeId,
+      { assignedRole: assignedRoleValue },
+      { runValidators: false }
+    );
 
     res.json({
       success: true,
-      message: "Role assigned successfully",
+      message: successMessage,
     });
   } catch (error) {
     console.log(error);
@@ -682,8 +702,6 @@ console.log("========= EMPLOYEE SAVED =========");
     });
   }
 };
-
-module.exports = { assignRoleToEmployee };
 
 
 
@@ -718,6 +736,13 @@ const deleteEmployee = async (req, res) => {
       },
     });
 
+    await recordSecurityAudit("auth.user.deleted", req, {
+      resourceType: "employee",
+      resourceId: deletedEmployee._id,
+      companyId,
+      metadata: { email: deletedEmployee.email },
+    });
+
     return res.status(200).json({ message: "Employee deleted successfully" });
   } catch (err) {
     return res.status(500).json({ message: "Server error" });
@@ -731,7 +756,8 @@ const deleteEmployee = async (req, res) => {
 const relieveEmployee = async (req, res) => {
   try {
     const { id } = req.params;
-    const { relievingDate, remarks, companyId } = req.body;
+    const { relievingDate, remarks } = req.body;
+    const companyId = resolveEffectiveCompanyId(req, req.body.companyId);
 
     if (!id) {
       return res.status(400).json({ message: "Employee ID is required" });

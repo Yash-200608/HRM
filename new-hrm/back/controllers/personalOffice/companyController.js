@@ -301,20 +301,43 @@ const updateCompany = async (req, res) => {
 ------------------------------------------------- */
 const updateCompanyLeave = async (req, res) => {
   try {
-    const { adminId, companyId, specialLeave } = req.body;
+    const {
+      adminId,
+      companyId,
+      specialLeave,
+      totalLeave,
+      attendanceRules,
+    } = req.body;
 
     const company = await Company.findOne({ _id: companyId });
     if (!company) return res.status(404).json({ message: "Company Not Found." });
     const admin = await Admin.findOne({ _id: adminId, companyId });
     if (!admin) return res.status(404).json({ message: "Admin Not Found." });
 
-    if (!specialLeave) return res.status(404).json({ messaeg: "special leave are required." })
+    if (totalLeave !== undefined && totalLeave !== null && totalLeave !== "") {
+      company.totalLeave = Number(totalLeave);
+    }
 
-    company.specialLeave = specialLeave;
+    if (specialLeave !== undefined && specialLeave !== null && specialLeave !== "") {
+      company.specialLeave = Number(specialLeave);
+    }
+
+    if (attendanceRules && typeof attendanceRules === "object") {
+      if (attendanceRules.clockInTime !== undefined) {
+        company.attendanceRules.clockInTime = attendanceRules.clockInTime;
+      }
+      if (attendanceRules.fullDayHours !== undefined) {
+        company.attendanceRules.fullDayHours = Number(attendanceRules.fullDayHours);
+      }
+      if (attendanceRules.halfDayHours !== undefined) {
+        company.attendanceRules.halfDayHours = Number(attendanceRules.halfDayHours);
+      }
+    }
 
     await company.save();
     res.status(200).json({
-      message: "Leave Count updated successfully",
+      message: "Company settings updated successfully",
+      company,
     });
   } catch (err) {
     res.status(500).json({ message: "Server error" });

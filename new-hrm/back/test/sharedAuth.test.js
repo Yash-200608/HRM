@@ -21,6 +21,8 @@ test("buildJwtClaimsV1 emits versioned claims with org and session metadata", ()
   });
 
   assert.equal(claims.ver, JWT_CLAIMS_VERSION);
+  assert.equal(claims.iss, "hrm-platform");
+  assert.equal(claims.aud, "hrm-platform");
   assert.equal(claims.id, "user-1");
   assert.equal(claims.orgId, "org-1");
   assert.equal(claims.principalKind, "admin");

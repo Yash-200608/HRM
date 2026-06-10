@@ -5,6 +5,8 @@ const {
   isMfaRole,
   SUPPORTED_MFA_ROLES,
   shouldRequireMfa,
+  assessMfaAtLogin,
+  isMfaEnrollmentRequired,
   generateRecoveryCodes,
   hashRecoveryCode,
   consumeRecoveryCode,
@@ -17,6 +19,42 @@ test("isMfaRole allows admin and super_admin only", () => {
   assert.equal(isMfaRole("super_admin"), true);
   assert.equal(isMfaRole("employee"), false);
   assert.equal(SUPPORTED_MFA_ROLES.has("admin"), true);
+});
+
+test("isMfaEnrollmentRequired is true when mandatory policy enabled and MFA not enrolled", () => {
+  const original = process.env.REQUIRE_ADMIN_MFA;
+  process.env.REQUIRE_ADMIN_MFA = "true";
+
+  assert.equal(
+    isMfaEnrollmentRequired({ role: "admin", mfaEnabled: false }),
+    true
+  );
+  assert.equal(
+    isMfaEnrollmentRequired({ role: "admin", mfaEnabled: true }),
+    false
+  );
+
+  process.env.REQUIRE_ADMIN_MFA = original;
+});
+
+test("assessMfaAtLogin reports enrollment and challenge states", () => {
+  const original = process.env.REQUIRE_ADMIN_MFA;
+  process.env.REQUIRE_ADMIN_MFA = "true";
+
+  assert.equal(
+    assessMfaAtLogin({ role: "admin", mfaEnabled: false }).status,
+    "enrollment_required"
+  );
+  assert.equal(
+    assessMfaAtLogin({
+      role: "admin",
+      mfaEnabled: true,
+      mfaSecret: "SECRET",
+    }).status,
+    "challenge_required"
+  );
+
+  process.env.REQUIRE_ADMIN_MFA = original;
 });
 
 test("shouldRequireMfa requires enabled secret and supported role", () => {

@@ -12,10 +12,21 @@ function enforceModuleAccess(moduleName) {
     }
 
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
       const organizationId = resolveOrganizationIdFromRequest(req);
 
       if (!organizationId) {
-        return next();
+        if (req.user.role === "super_admin") {
+          return next();
+        }
+
+        return res.status(403).json({
+          code: "TENANT_REQUIRED",
+          message: "Organization context is required",
+        });
       }
 
       const result = await checkEntitlement(organizationId, featureKey);
@@ -46,7 +57,11 @@ function enforceModuleAccess(moduleName) {
 
       next();
     } catch (error) {
-      return next();
+      console.error("moduleAccess error:", error);
+      return res.status(503).json({
+        code: "ENTITLEMENT_CHECK_FAILED",
+        message: "Unable to verify feature access",
+      });
     }
   };
 }

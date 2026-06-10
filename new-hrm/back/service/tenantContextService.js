@@ -97,15 +97,23 @@ async function resolveTenantContext(organizationId) {
 }
 
 function resolveOrganizationIdFromRequest(req) {
-  return (
-    req.user?.companyId ||
-    req.body?.companyId ||
-    req.body?.organizationId ||
-    req.query?.companyId ||
-    req.query?.organizationId ||
-    req.params?.companyId ||
-    null
-  );
+  if (!req.user) {
+    return null;
+  }
+
+  if (req.user.role === "super_admin") {
+    return (
+      req.user.companyId ||
+      req.body?.companyId ||
+      req.body?.organizationId ||
+      req.query?.companyId ||
+      req.query?.organizationId ||
+      req.params?.companyId ||
+      null
+    );
+  }
+
+  return req.user.companyId || null;
 }
 
 function isMutationMethod(method) {

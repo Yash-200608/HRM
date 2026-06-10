@@ -12,10 +12,14 @@ const authMiddleware = require(
 const checkPermission = require(
   "../middleware/checkPermission"
 );
- 
+const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
+
+const attendanceAccess = enforceModuleAccess("attendance");
+
 router.get(
   "/",
   authMiddleware,
+  attendanceAccess,
   checkPermission("attendance", "view"),
   attendanceController.getAttendance
 );
@@ -23,6 +27,7 @@ router.get(
 router.get(
   "/attendancebyid",
   authMiddleware,
+  attendanceAccess,
   checkPermission("attendance", "view"),
   attendanceController.getAttendanceById
 );
@@ -30,6 +35,7 @@ router.get(
 router.post(
   "/clock-in/:userId",
   authMiddleware,
+  attendanceAccess,
   checkPermission("attendance", "create"),
   attendanceController.clockIn
 );
@@ -37,6 +43,7 @@ router.post(
 router.post(
   "/clock-out/:userId",
   authMiddleware,
+  attendanceAccess,
   checkPermission("attendance", "create"),
   attendanceController.clockOut
 );
@@ -44,6 +51,7 @@ router.post(
 router.patch(
   "/update/attendance",
   authMiddleware,
+  attendanceAccess,
   checkPermission("attendance", "edit"),
   attendanceController.updateAttendanceByDay
 );
@@ -51,6 +59,7 @@ router.patch(
 router.patch(
   "/absent/attendance",
   authMiddleware,
+  attendanceAccess,
   checkPermission("attendance", "edit"),
   attendanceController.handleAbsent
 );

@@ -20,22 +20,55 @@ const { generateAccessToken, generateRefreshToken } = require("../../service/ser
 const { buildAccessTokenInput, buildUserSubscriptionFields } = require("../../service/tokenClaimsService.js");
 const { getAccountTypeFromRole } = require("../../service/sessionSecurityService.js");
 const { SuperAdmin } = require("../../models/personalOffice/superadminModel");
+const {
+  DEFAULT_USER_PREFERENCES,
+} = require("../../models/personalOffice/userPreferencesSchema");
 const sendEmail = require("../../service/mailService.js");
-const { clearAuthCookies, revokeRequestRefreshTokens } = require("../../service/sessionSecurityService.js");
-const { shouldRequireMfa } = require("../../service/mfaService.js");
-const { buildMfaLoginChallenge } = require("./securityController.js");
+const {
+  clearAuthCookies,
+  issueAuthCookies,
+  revokeRequestRefreshTokens,
+} = require("../../service/sessionSecurityService.js");
+const {
+  assessMfaAtLogin,
+  buildMfaEnrollmentChallenge,
+  buildMfaLoginChallenge,
+} = require("../../service/mfaService.js");
+const { issueAuthenticatedSession } = require("../../service/authLoginService.js");
+const {
+  recordLoginFailure,
+  recordSecurityAudit,
+} = require("../../service/securityAuditService.js");
+const {
+  findActiveSession,
+  updateSessionRefreshToken,
+  verifySessionRefreshToken,
+  listAuthSessions,
+  revokeAuthSession,
+  revokeOtherAuthSessions,
+  serializeAuthSession,
+} = require("../../service/authSessionService.js");
+const {
+  assertSuperAdmin,
+  assertCanViewUserProfile,
+  assertCanUpdateUserProfile,
+  assertSameCompany,
+  assertSelfOrSuperAdmin,
+  resolveEffectiveCompanyId,
+  resolveEffectiveUserId,
+  isSuperAdmin,
+} = require("../../utils/authAccess.js");
 
 // ---------------- Register Admin ----------------
 
 const registerAdmin = async (req, res) => {
   try {
-    const { username, email, password, companyId, role, userId, mobile, address } = req.body;
-
-    // Superadmin check
-    const superAdmin = await SuperAdmin.findById(userId);
-    if (!superAdmin || superAdmin.role !== "super_admin") {
-      return res.status(403).json({ message: "Unauthorized. Only superadmins can create admins." });
+    if (!assertSuperAdmin(req, res)) {
+      return;
     }
+
+    const { username, email, password, companyId, role, mobile, address } = req.body;
+    const userId = req.user.id;
 
     // Email checks
     if (await Admin.findOne({ email })) {
@@ -92,6 +125,13 @@ const registerAdmin = async (req, res) => {
 
     await recentActivity.create({ title: `New Admin Added.`, createdBy: userId, createdByRole: "Admin", companyId: companyId });
 
+    await recordSecurityAudit("auth.user.created", req, {
+      resourceType: "admin",
+      resourceId: newAdmin._id,
+      companyId,
+      metadata: { email: newAdmin.email },
+    });
+
     return res.status(201).json({
       message: "Admin registered successfully",
       user: {
@@ -115,14 +155,12 @@ const registerAdmin = async (req, res) => {
 // ---------------- Update Admin ----------------
 const updateAdmin = async (req, res) => {
   try {
-    const { id: adminId } = req.params;
-    const { username, email, password, companyId, role, mobile, address, superAdminId } = req.body;
-
-    // Superadmin check
-    const superAdmin = await SuperAdmin.findById(superAdminId);
-    if (!superAdmin || superAdmin.role !== "super_admin") {
-      return res.status(403).json({ message: "Unauthorized. Only superadmins can update admins." });
+    if (!assertSuperAdmin(req, res)) {
+      return;
     }
+
+    const { id: adminId } = req.params;
+    const { username, email, password, companyId, role, mobile, address } = req.body;
 
     const adminToUpdate = await Admin.findById(adminId);
     if (!adminToUpdate) return res.status(404).json({ message: "Admin not found" });
@@ -186,13 +224,11 @@ const updateAdmin = async (req, res) => {
 
 const adminStatusChange = async (req, res) => {
   try {
-    const { adminId, superAdminId, status } = req.body;
-
-    const superAdmin = await SuperAdmin.findById(superAdminId);
-
-    if (!superAdmin || superAdmin.role !== "super_admin") {
-      return res.status(403).json({ message: "Unauthorized. Only superadmins can delete admins." });
+    if (!assertSuperAdmin(req, res)) {
+      return;
     }
+
+    const { adminId, status } = req.body;
 
     const admin = await Admin.updateOne({ _id: adminId }, { $set: { isActive: status } });
     if (!admin) return res.status(404).json({ message: "Admin not found" });
@@ -210,19 +246,23 @@ const adminStatusChange = async (req, res) => {
 // ---------------- Delete Admin ----------------
 const deleteAdmin = async (req, res) => {
   try {
-
-    const { id: adminId, userId: superAdminId } = req.query;
-
-    // Superadmin check
-    const superAdmin = await SuperAdmin.findById(superAdminId);
-    if (!superAdmin || superAdmin.role !== "super_admin") {
-      return res.status(403).json({ message: "Unauthorized. Only superadmins can delete admins." });
+    if (!assertSuperAdmin(req, res)) {
+      return;
     }
+
+    const { id: adminId } = req.query;
 
     const adminToDelete = await Admin.findById(adminId);
     if (!adminToDelete) return res.status(404).json({ message: "Admin not found" });
 
     await Admin.findByIdAndDelete(adminId);
+
+    await recordSecurityAudit("auth.user.deleted", req, {
+      resourceType: "admin",
+      resourceId: adminId,
+      companyId: adminToDelete.companyId,
+      metadata: { email: adminToDelete.email },
+    });
 
     return res.status(200).json({ message: "Admin deleted successfully" });
   } catch (err) {
@@ -248,16 +288,27 @@ const loginAdmin = async (req, res) => {
       .select("+password +mfaSecret");
 
     if (!user) {
+      await recordLoginFailure(req, { email, reason: "invalid_email", accountType: "admin" });
       return res.status(400).json({ message: "Invalid email" });
     }
 
     // 3️⃣ Password check
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      await recordLoginFailure(req, { email, reason: "invalid_password", accountType: "admin" });
       return res.status(400).json({ message: "Invalid password" });
     }
 
-    if (shouldRequireMfa(user)) {
+    const mfaState = assessMfaAtLogin(user);
+    if (mfaState.status === "enrollment_required") {
+      const enrollment = await buildMfaEnrollmentChallenge(user);
+      return res.status(200).json({
+        message: "MFA enrollment required",
+        ...enrollment,
+      });
+    }
+
+    if (mfaState.status === "challenge_required") {
       const challenge = await buildMfaLoginChallenge(user);
       return res.status(200).json({
         message: "MFA verification required",
@@ -265,33 +316,9 @@ const loginAdmin = async (req, res) => {
       });
     }
 
-    // 4️⃣ Generate Access + Refresh Token
-    const payload = {
-      id: user._id,
-      role: user?.role,
-      companyId: user.companyId?._id || null,
-    };
-
-    const subscriptionFields = await buildUserSubscriptionFields(user, {
+    const session = await issueAuthenticatedSession(req, res, user, {
       accountType: getAccountTypeFromRole(user.role),
     });
-    const accessToken = generateAccessToken(subscriptionFields.tokenInput);
-    const refreshToken = generateRefreshToken({ id: user._id });
-
-    // 🔥 Save refresh token in DB
-    user.refreshToken = refreshToken;
-    await user.save();
-
-    // 🔥 Send refresh token in httpOnly cookie
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false, // production me true
-      sameSite: "strict",
-    });
-
-    // 5️⃣ Response formatting
-    const userData = user.toObject();
-    delete userData.password;
 
     await recentActivity.create({
       title: `Welcome, ${user?.username}`,
@@ -302,13 +329,13 @@ const loginAdmin = async (req, res) => {
 
     return res.status(200).json({
       message: "Login successful",
-      accessToken, // 🔥 now access token
+      accessToken: session.accessToken,
       user: {
-        ...userData,
+        ...session.userData,
         role: user?.role,
-        fullName: userData.username,
-        entitlements: subscriptionFields.entitlements,
-        subscriptionPlan: subscriptionFields.subscriptionPlan,
+        fullName: session.userData.username,
+        entitlements: session.subscriptionFields.entitlements,
+        subscriptionPlan: session.subscriptionFields.subscriptionPlan,
       },
     });
 
@@ -338,9 +365,33 @@ const refresh = async (req, res) => {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
-    const newAccessToken = generateAccessToken(
-      await buildAccessTokenInput(user, { accountType: getAccountTypeFromRole(user.role) })
-    );
+    const sessionId = decoded.sessionId || null;
+    if (sessionId) {
+      const activeSession = await findActiveSession(sessionId);
+      if (!activeSession || !verifySessionRefreshToken(activeSession, token)) {
+        return res.status(403).json({ message: "Session revoked" });
+      }
+    }
+
+    const accountType = getAccountTypeFromRole(user.role);
+    const tokenInput = await buildAccessTokenInput(user, {
+      accountType,
+      sessionId: sessionId || undefined,
+    });
+    const newAccessToken = generateAccessToken(tokenInput);
+    const newRefreshToken = generateRefreshToken({
+      id: user._id,
+      sessionId,
+    });
+
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    if (sessionId) {
+      await updateSessionRefreshToken(sessionId, newRefreshToken);
+    }
+
+    issueAuthCookies(res, { accessToken: newAccessToken, refreshToken: newRefreshToken });
 
     return res.json({ accessToken: newAccessToken });
 
@@ -364,28 +415,59 @@ const logout = async (req, res) => {
   }
 };
 
+const getSession = async (req, res) => {
+  try {
+    const sessionUser = req.user;
+
+    if (!sessionUser) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const sanitized = { ...sessionUser };
+    delete sanitized.password;
+    delete sanitized.refreshToken;
+    delete sanitized.mfaSecret;
+
+    return res.status(200).json({
+      authenticated: true,
+      user: {
+        ...sanitized,
+        _id: sanitized._id || sanitized.id,
+        fullName: sanitized.fullName || sanitized.username || sanitized.name,
+        entitlements: sanitized.entitlements || [],
+        subscriptionPlan: sanitized.subscriptionPlan || null,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 
 const getUserById = async (req, res) => {
   try {
-    const { companyId, userId } = req.query;
+    const requestedUserId = req.query.userId || req.user.id;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
 
-    if (!userId) {
-      return res.status(400).json({ message: "userId is required" });
+    if (!assertCanViewUserProfile(req, res, requestedUserId, companyId)) {
+      return;
     }
 
     let user = null;
     let role = "";
 
     // ===== 1. Check Super Admin FIRST =====
-    user = await SuperAdmin.findById(userId).select("-password");
+    user = await SuperAdmin.findById(requestedUserId).select("-password");
 
     if (user) {
+      if (!isSuperAdmin(req.user) && String(req.user.id) !== String(requestedUserId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       role = "super_admin";
       return res.status(200).json({ user, role });
     }
 
     // ===== 2. Check Admin =====
-    user = await Admin.findById(userId).select("-password");
+    user = await Admin.findById(requestedUserId).select("-password");
 
     if (user) {
       role = user.role || "admin";
@@ -406,7 +488,7 @@ const getUserById = async (req, res) => {
     }
 
     user = await Employee.findOne({
-      _id: userId,
+      _id: requestedUserId,
       createdBy: companyId,
     })
       .select("-password")
@@ -431,24 +513,11 @@ const getUserById = async (req, res) => {
 // ---------------- Get All Admins ----------------
 const getAllAdmins = async (req, res) => {
   try {
-    const adminId = req.params.id;
-    // 1️⃣ Check requesting admin
-    const requestingAdmin = await SuperAdmin.findById(adminId)
-
-    if (!requestingAdmin) {
-      return res.status(404).json({
-        message: "Admin not found"
-      });
+    if (!assertSuperAdmin(req, res)) {
+      return;
     }
 
-    // 2️⃣ Role check
-    if (requestingAdmin.role !== "super_admin") {
-      return res.status(403).json({
-        message: "Access denied. Only super admin can view all admins"
-      });
-    }
-
-    // 3️⃣ Fetch all admins
+    // Fetch all admins
     const admins = await Admin.find().populate({
       path: "companyId",
       select: "name _id", // _id include optional, lekin mostly populate me reh jaata hai
@@ -468,12 +537,18 @@ const getAllAdmins = async (req, res) => {
 
 const updateUser = async (req, res) => {
   try {
-    const { userId, companyId, data } = req.body;
+    const { data } = req.body;
+    const userId = resolveEffectiveUserId(req, req.body.userId);
+    const companyId = resolveEffectiveCompanyId(req, req.body.companyId);
 
-    if (!userId || !data) {
+    if (!data) {
       return res.status(400).json({
-        message: "userId and data are required",
+        message: "data is required",
       });
+    }
+
+    if (!assertCanUpdateUserProfile(req, res, userId, companyId)) {
+      return;
     }
 
     let user = null;
@@ -602,12 +677,18 @@ const updateUser = async (req, res) => {
 };
 const changePassword = async (req, res) => {
   try {
-    const { userId, email, newPassword, companyId } = req.body;
+    const { email, newPassword } = req.body;
+    const userId = String(req.user.id);
+    const companyId = resolveEffectiveCompanyId(req, req.body.companyId);
 
-    if (!userId || !email || !newPassword) {
+    if (!email || !newPassword) {
       return res.status(400).json({
-        message: "userId, email and newPassword are required",
+        message: "email and newPassword are required",
       });
+    }
+
+    if (!assertSelfOrSuperAdmin(req, res, userId)) {
+      return;
     }
 
     let user = null;
@@ -697,9 +778,12 @@ const changePassword = async (req, res) => {
 
 const getDashboardSummary = async (req, res) => {
   try {
-    const { userId, companyId } = req.query;
+    const userId = req.user.id;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
 
-    if (!userId) return res.status(400).json({ message: "userId is required" });
+    if (!isSuperAdmin(req.user) && !companyId) {
+      return res.status(400).json({ message: "companyId is required" });
+    }
 
     const now = new Date();
     const today = new Date();
@@ -997,9 +1081,12 @@ const getDashboardSummary = async (req, res) => {
 
 const analyticsReport = async (req, res) => {
   try {
-    const { userId, companyId } = req.query;
-    if (!userId || !companyId)
-      return res.status(400).json({ message: "userId or companyId is required" });
+    const userId = req.user.id;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
+
+    if (!companyId) {
+      return res.status(400).json({ message: "companyId is required" });
+    }
 
     const company = await Company.findById(companyId);
     if (!company) return res.status(404).json({ message: "Company Not Found." });
@@ -1246,7 +1333,12 @@ function getStartOfWeekFromISO(isoWeek) {
 // Controller
 const getUserWeeklyAttendanceReport = async (req, res) => {
   try {
-    const { companyId, week } = req.query;
+    if (req.user.role !== "admin" && req.user.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
+    const { week } = req.query;
 
     if (!mongoose.Types.ObjectId.isValid(companyId)) {
       return res.status(400).json({ success: false, message: "Invalid company ID" });
@@ -1352,13 +1444,8 @@ const getUserWeeklyAttendanceReport = async (req, res) => {
 
 const getNotificationData = async (req, res) => {
   try {
-    const { userId, companyId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "userId is required",
-      });
-    }
+    const userId = req.user.id;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
 
     let user = null;
     let role = "";
@@ -1422,9 +1509,10 @@ const getNotificationData = async (req, res) => {
 // Delete single notification
 const deleteNotifications = async (req, res) => {
   try {
-    const { id, userId, companyId } = req.query;
+    const { id } = req.query;
+    const userId = req.user.id;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
 
-    if (!userId) return res.status(400).json({ message: "userId is required" });
     if (!id) return res.status(400).json({ message: "Notification id is required" });
 
     let user = await Admin.findById(userId);
@@ -1470,9 +1558,8 @@ const deleteNotifications = async (req, res) => {
 // Delete all notifications
 const deleteAllNotifications = async (req, res) => {
   try {
-    const { userId, companyId } = req.query;
-
-    if (!userId) return res.status(400).json({ message: "userId is required" });
+    const userId = req.user.id;
+    const companyId = resolveEffectiveCompanyId(req, req.query.companyId);
 
     let user = await Admin.findById(userId);
     let role = "";
@@ -1518,9 +1605,8 @@ const deleteAllNotifications = async (req, res) => {
 // Mark notifications as read
 const markAsReadNotifications = async (req, res) => {
   try {
-    const { userId, companyId } = req.body;
-
-    if (!userId) return res.status(400).json({ message: "userId is required" });
+    const userId = req.user.id;
+    const companyId = resolveEffectiveCompanyId(req, req.body.companyId);
 
     let filter = { userId, status: "unread" };
     if (companyId) filter.companyId = companyId;
@@ -1533,7 +1619,209 @@ const markAsReadNotifications = async (req, res) => {
   }
 };
 
+function normalizePreferences(preferences = {}) {
+  return {
+    language: preferences.language || DEFAULT_USER_PREFERENCES.language,
+    compactView:
+      preferences.compactView ?? DEFAULT_USER_PREFERENCES.compactView,
+    notifications: {
+      email:
+        preferences.notifications?.email ??
+        DEFAULT_USER_PREFERENCES.notifications.email,
+      tasks:
+        preferences.notifications?.tasks ??
+        DEFAULT_USER_PREFERENCES.notifications.tasks,
+      leave:
+        preferences.notifications?.leave ??
+        DEFAULT_USER_PREFERENCES.notifications.leave,
+      expenses:
+        preferences.notifications?.expenses ??
+        DEFAULT_USER_PREFERENCES.notifications.expenses,
+    },
+  };
+}
+
+const ALLOWED_LANGUAGES = ["en", "es", "fr", "de"];
+
+async function findAuthenticatedAccount(userId) {
+  const superAdmin = await SuperAdmin.findById(userId);
+  if (superAdmin) {
+    return { account: superAdmin, role: "super_admin", Model: SuperAdmin };
+  }
+
+  const admin = await Admin.findById(userId);
+  if (admin) {
+    return { account: admin, role: admin.role || "admin", Model: Admin };
+  }
+
+  const employee = await Employee.findById(userId);
+  if (employee) {
+    return { account: employee, role: "employee", Model: Employee };
+  }
+
+  return null;
+}
+
+async function persistAccountPreferences(userId, preferences) {
+  const result = await findAuthenticatedAccount(userId);
+
+  if (!result) {
+    return null;
+  }
+
+  return result.Model.findByIdAndUpdate(
+    userId,
+    { $set: { preferences } },
+    { new: true, runValidators: false }
+  );
+}
+
+const getUserPreferences = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const result = await findAuthenticatedAccount(userId);
+
+    if (!result) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      preferences: normalizePreferences(result.account.preferences),
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+const updateUserPreferences = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { preferences } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!preferences || typeof preferences !== "object") {
+      return res.status(400).json({ message: "preferences object is required" });
+    }
+
+    const result = await findAuthenticatedAccount(userId);
+
+    if (!result) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const current = normalizePreferences(result.account.preferences);
+
+    if (preferences.language !== undefined) {
+      if (!ALLOWED_LANGUAGES.includes(preferences.language)) {
+        return res.status(400).json({ message: "Invalid language selection" });
+      }
+      current.language = preferences.language;
+    }
+
+    if (preferences.compactView !== undefined) {
+      current.compactView = Boolean(preferences.compactView);
+    }
+
+    if (preferences.notifications && typeof preferences.notifications === "object") {
+      Object.keys(DEFAULT_USER_PREFERENCES.notifications).forEach((key) => {
+        if (preferences.notifications[key] !== undefined) {
+          current.notifications[key] = Boolean(preferences.notifications[key]);
+        }
+      });
+    }
+
+    const updated = await persistAccountPreferences(userId, current);
+
+    if (!updated) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      message: "Preferences updated successfully",
+      preferences: normalizePreferences(updated.preferences),
+    });
+  } catch (err) {
+    console.error("updateUserPreferences error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 // Export
+const listActiveSessions = async (req, res) => {
+  try {
+    const accountType = getAccountTypeFromRole(req.user.role);
+    const sessions = await listAuthSessions(req.user.id, accountType);
+
+    return res.status(200).json({
+      sessions: sessions.map((session) =>
+        serializeAuthSession(session, req.user.sessionId)
+      ),
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to load sessions" });
+  }
+};
+
+const revokeSessionById = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const accountType = getAccountTypeFromRole(req.user.role);
+    const sessions = await listAuthSessions(req.user.id, accountType);
+    const owned = sessions.find((session) => session.sessionId === sessionId);
+
+    if (!owned) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    await revokeAuthSession(sessionId);
+
+    await recordSecurityAudit("auth.session.revoked", req, {
+      resourceType: "session",
+      resourceId: sessionId,
+    });
+
+    return res.status(200).json({ message: "Session revoked" });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to revoke session" });
+  }
+};
+
+const revokeOtherSessions = async (req, res) => {
+  try {
+    if (!req.user?.sessionId) {
+      return res.status(400).json({ message: "Current session is required" });
+    }
+
+    const accountType = getAccountTypeFromRole(req.user.role);
+    const revokedCount = await revokeOtherAuthSessions(
+      req.user.id,
+      accountType,
+      req.user.sessionId
+    );
+
+    await recordSecurityAudit("auth.session.revoked_others", req, {
+      resourceType: "session",
+      resourceId: req.user.sessionId,
+      metadata: { revokedCount },
+    });
+
+    return res.status(200).json({
+      message: "Other sessions revoked",
+      revokedCount,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to revoke other sessions" });
+  }
+};
+
 module.exports = {
   registerAdmin,
   updateAdmin,
@@ -1552,5 +1840,11 @@ module.exports = {
   adminStatusChange,
   refresh,
   logout,
-  getUserWeeklyAttendanceReport
+  getSession,
+  getUserWeeklyAttendanceReport,
+  getUserPreferences,
+  updateUserPreferences,
+  listActiveSessions,
+  revokeSessionById,
+  revokeOtherSessions,
 };

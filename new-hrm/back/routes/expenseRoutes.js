@@ -11,6 +11,9 @@ const {
 
 const authMiddleware = require("../middleware/authMiddleware");
 const checkPermission = require("../middleware/checkPermission");
+const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
+
+const expensesAccess = enforceModuleAccess("expenses");
 
 /*
 ==================================================
@@ -24,21 +27,10 @@ Custom Roles => permission based
 // Add Expense
 router.post(
   "/add",
-   (req,res,next)=>{
-    console.log("ADD ROUTE HIT");
-    next();
-  },
   authMiddleware,
+  expensesAccess,
   checkPermission("expenses", "create"),
-   (req,res,next)=>{
-    console.log("BEFORE MULTER");
-    next();
-  },
   upload.single("expenseImage"),
-   (req,res,next)=>{
-    console.log("AFTER MULTER");
-    next();
-  },
   addExpense
 );
 
@@ -46,6 +38,7 @@ router.post(
 router.get(
   "/get/:companyId",
   authMiddleware,
+  expensesAccess,
   checkPermission("expenses", "view"),
   getExpenses
 );
@@ -54,6 +47,7 @@ router.get(
 router.get(
   "/getbyid/:id",
   authMiddleware,
+  expensesAccess,
   checkPermission("expenses", "view"),
   getExpenseById
 );
@@ -62,6 +56,7 @@ router.get(
 router.put(
   "/updateExpense/:id",
   authMiddleware,
+  expensesAccess,
   checkPermission("expenses", "edit"),
   upload.single("expenseImage"),
   updateExpense
@@ -70,6 +65,7 @@ router.put(
 router.delete(
   "/deleteExpense/:id",
   authMiddleware,
+  expensesAccess,
   checkPermission("expenses", "delete"),
   deleteExpense
 );

@@ -1,5 +1,6 @@
 
 const mongoose = require("mongoose");
+const { userPreferencesSchema } = require("./userPreferencesSchema");
 
 // Employee Schema
 const employeeSchema = new mongoose.Schema(
@@ -190,6 +191,10 @@ bloodGroup: {
     refreshToken: String,
     sessionInvalidatedAt: { type: Date, default: null },
     tokenVersion: { type: Number, default: 0 },
+    preferences: {
+      type: userPreferencesSchema,
+      default: () => ({}),
+    },
   },
   {
     timestamps: true, // createdAt, updatedAt

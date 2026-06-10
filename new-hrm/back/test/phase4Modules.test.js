@@ -5,7 +5,7 @@ const { resolveModuleEntitlement } = require("@hrm-subscription/shared-types");
 test("Phase 4 modules map to plan-gated entitlements", () => {
   assert.equal(resolveModuleEntitlement("performance"), "performanceReviews");
   assert.equal(resolveModuleEntitlement("assets"), "assetManagement");
-  assert.equal(resolveModuleEntitlement("learning"), "workflowAutomation");
+  assert.equal(resolveModuleEntitlement("learning"), "learningManagement");
 });
 
 test("Phase 4 premium modules are absent on lower-tier plan features", () => {

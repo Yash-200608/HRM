@@ -3,6 +3,9 @@ const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const { createCorsOptions } = require("./config/corsConfig.js");
+const requireUploadAccess = require("./middleware/requireUploadAccess.js");
+const { handleUploadError } = require("./utils/allowedUploads.js");
 const swaggerUI = require("swagger-ui-express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -26,6 +29,8 @@ const accessroleRoutes = require("./routes/roleRoutes");
 const resignationRoutes = require("./routes/resignationRoutes");
 const holidayRoutes = require("./routes/holidayRoutes");
 const authMiddleware = require("./middleware/authMiddleware.js");
+const securityHeaders = require("./middleware/securityHeaders.js");
+const { csrfProtection } = require("./middleware/csrfProtection.js");
 const { correlationIdMiddleware } = require("./middleware/correlationIdMiddleware.js");
 const { mountSubscriptionProxyRoutes } = require("./routes/subscriptionProxyRoutes.js");
 const { router: platformRoutes, handleOutboxInbound } = require("./routes/platformRoutes.js");
@@ -69,6 +74,7 @@ const PORT = process.env.HRM_PORT || process.env.PORT || 5000;
 // ------------------------
 // Middlewares
 // ------------------------
+app.use(securityHeaders);
 app.use(correlationIdMiddleware);
 app.post(
   "/api/platform/outbox/inbound",
@@ -77,19 +83,8 @@ app.post(
 );
 app.use(express.json());
 app.use(cookieParser());
-app.use(
-  cors({
-    origin: [
-      "http://localhost:8080",
-      "http://localhost:8081",
-      "http://localhost:8082",
-      "https://salmon-tapir-632940.hostingersite.com",
-      process.env.HRM_FRONTEND_URL,
-      process.env.FRONTEND_URL,
-    ].filter(Boolean),
-    credentials: true,
-  }),
-);
+app.use(cors(createCorsOptions()));
+app.use(csrfProtection);
 
 app.use("/api", resignationRoutes);
 app.use("/api", holidayRoutes);
@@ -118,7 +113,7 @@ app.use(
   )
 );
 
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", requireUploadAccess, express.static("uploads"));
 // job-portal
 app.use("/api/role", roleRoutes);
 app.use("/api/candidate", candidateRoutes);
@@ -169,14 +164,55 @@ app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
+app.use(handleUploadError);
+
 const server = http.createServer(app);
+let isShuttingDown = false;
+
+function shutdown(signal) {
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+
+  server.close((error) => {
+    if (error) {
+      console.error("Error while closing server:", error.message);
+      process.exit(1);
+    }
+    if (signal) {
+      process.kill(process.pid, signal);
+    } else {
+      process.exit(0);
+    }
+  });
+
+  setTimeout(() => process.exit(1), 5000).unref();
+}
+
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use.`);
+    console.error("Stop the other HRM backend instance, then retry:");
+    console.error(`  Get-NetTCPConnection -LocalPort ${PORT} -State Listen | Select OwningProcess`);
+    console.error("  Stop-Process -Id <PID> -Force");
+    process.exit(1);
+  }
+
+  console.error("Server error:", error);
+  process.exit(1);
+});
+
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGUSR2", () => {
+  server.close(() => process.kill(process.pid, "SIGUSR2"));
+});
 
 async function startServer() {
   try {
     await connectDB();
-    console.log("✅ MongoDB connected successfully!");
-
-    const ioInstance = initSocket(server);
+    initSocket(server);
 
     server.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
@@ -188,5 +224,4 @@ async function startServer() {
   }
 }
 
-// Start everything
 startServer();

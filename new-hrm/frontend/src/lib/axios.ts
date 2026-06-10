@@ -1,29 +1,37 @@
 import axios from "axios";
+import { attachCsrfHeader, captureCsrfTokenFromResponse } from "@/lib/csrf";
+import { handleUnauthorized } from "@/lib/session";
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
 });
 
-// ✅ Request interceptor (token auto attach)
 instance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    config.headers = attachCsrfHeader(
+      config.headers as Record<string, unknown>,
+      config.method,
+    ) as typeof config.headers;
+
     return config;
   },
   (error) => Promise.reject(error),
 );
 
-// ✅ Response interceptor (auto logout on 401)
 instance.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    captureCsrfTokenFromResponse(res.headers as Record<string, unknown>);
+    return res;
+  },
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.clear();
-      window.location.href = "/login";
+    if (error.response?.status === 401 && !(error.config as { skipAuthRedirect?: boolean })?.skipAuthRedirect) {
+      handleUnauthorized();
     }
     return Promise.reject(error);
   },

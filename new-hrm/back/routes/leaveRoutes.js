@@ -4,6 +4,10 @@ const { enforceModuleAccess } = require("../middleware/moduleAccess.js");
 const { requireWritableTenant } = require("../middleware/requireWritableTenant.js");
 
 const router = express.Router();
+const authMiddleware = require("../middleware/authMiddleware.js");
+
+router.use(authMiddleware);
+
 const leaveAccess = enforceModuleAccess("leave");
 const leaveMutationGuard = requireWritableTenant();
 
