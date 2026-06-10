@@ -2,6 +2,20 @@ const { redisIncrWithExpiry } = require("../service/redisClient.js");
 
 const buckets = new Map();
 
+function isLocalDevRequest(req) {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
+  const ip = String(req.ip || req.socket?.remoteAddress || "").trim();
+  return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "::ffff:127.0.0.1" ||
+    ip.endsWith("127.0.0.1")
+  );
+}
+
 function pruneExpiredBuckets(now) {
   for (const [key, bucket] of buckets.entries()) {
     if (now > bucket.resetAt) {
@@ -28,8 +42,13 @@ function createRateLimiter({
   message = "Too many requests, please try again later",
   keyFn = (req) => req.ip || req.socket?.remoteAddress || "unknown",
   prefix = "rate-limit",
+  skipLocalDev = false,
 } = {}) {
   return async (req, res, next) => {
+    if (skipLocalDev && isLocalDevRequest(req)) {
+      return next();
+    }
+
     const now = Date.now();
     pruneExpiredBuckets(now);
 
@@ -66,6 +85,7 @@ const authLoginLimiter = createRateLimiter({
   max: Number(process.env.AUTH_RATE_LIMIT_MAX || 20),
   message: "Too many login attempts, please try again later",
   prefix: "auth-login",
+  skipLocalDev: true,
 });
 
 const passwordResetLimiter = createRateLimiter({

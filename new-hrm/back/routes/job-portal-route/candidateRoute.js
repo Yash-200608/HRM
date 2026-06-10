@@ -20,6 +20,7 @@ router.post(
   addCandidate
 );
 router.get("/get", access, getAllCandidates);
+router.get("/getbyid/:id", access, getSingleCandidate);
 router.get("/getbyid", access, getSingleCandidate);
 router.put(
   "/update",

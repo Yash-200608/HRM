@@ -1,5 +1,7 @@
 const Product = require("../../models/lead-portal/product");
 
+const resolveRequestId = (req) => req.params.id || req.query.id || req.body.id;
+
 /**
  * @desc    Add Product
  * @route   POST /api/products
@@ -83,8 +85,15 @@ const getProducts = async (req, res) => {
  */
 const getProductById = async (req, res) => {
   try {
+    const id = resolveRequestId(req);
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Course id is required",
+      });
+    }
 
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(id);
 
     if (!product) {
       return res.status(404).json({

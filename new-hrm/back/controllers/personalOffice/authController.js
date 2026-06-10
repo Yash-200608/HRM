@@ -274,8 +274,9 @@ const deleteAdmin = async (req, res) => {
 const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
@@ -283,19 +284,19 @@ const loginAdmin = async (req, res) => {
     let role = null;
 
     // 1️⃣ Try Admin login
-    user = await Admin.findOne({ email })
+    user = await Admin.findOne({ email: normalizedEmail })
       .populate("companyId", "name logo")
       .select("+password +mfaSecret");
 
     if (!user) {
-      await recordLoginFailure(req, { email, reason: "invalid_email", accountType: "admin" });
+      await recordLoginFailure(req, { email: normalizedEmail, reason: "invalid_email", accountType: "admin" });
       return res.status(400).json({ message: "Invalid email" });
     }
 
     // 3️⃣ Password check
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      await recordLoginFailure(req, { email, reason: "invalid_password", accountType: "admin" });
+      await recordLoginFailure(req, { email: normalizedEmail, reason: "invalid_password", accountType: "admin" });
       return res.status(400).json({ message: "Invalid password" });
     }
 
@@ -581,20 +582,25 @@ const updateUser = async (req, res) => {
       if (adminUser) {
         role = adminUser.role || "admin";
 
-        if (!companyId) {
+        // Use provided companyId (from body or resolved from req.user) or fall back to the admin's stored companyId.
+        // This fixes "companyId not found / required" errors in admin self-settings/profile updates
+        // where the client may not send companyId explicitly.
+        const effectiveCompanyId = companyId || (adminUser.companyId ? adminUser.companyId.toString() : null);
+
+        if (!effectiveCompanyId) {
           return res.status(400).json({
             message: "companyId is required for admin",
           });
         }
 
-        const company = await Company.findById(companyId);
+        const company = await Company.findById(effectiveCompanyId);
         if (!company) {
           return res.status(404).json({
             message: "Invalid companyId",
           });
         }
 
-        if (adminUser.companyId.toString() !== companyId) {
+        if (adminUser.companyId && adminUser.companyId.toString() !== effectiveCompanyId) {
           return res.status(403).json({
             message: "Admin does not belong to this company",
           });
@@ -610,30 +616,48 @@ const updateUser = async (req, res) => {
           adminUser.profileImage = data.profileImage;
 
         user = await adminUser.save();
-        companyReference = companyId;
+        companyReference = effectiveCompanyId;
       }
 
       // ===== 3️⃣ EMPLOYEE =====
       else {
-        if (!companyId) {
+        // Load employee first (by authenticated id) to allow fallback to its createdBy for self profile/settings updates.
+        // This prevents "companyId required" errors when the client doesn't send companyId (common in employee settings).
+        const employee = await Employee.findById(userId);
+        if (!employee) {
+          return res.status(404).json({
+            message: "User not found",
+          });
+        }
+
+        const employeeCompanyId = employee.createdBy ? employee.createdBy.toString() : null;
+        const effectiveCompanyId = companyId || employeeCompanyId;
+
+        if (!effectiveCompanyId) {
           return res.status(400).json({
             message: "companyId is required for employee",
           });
         }
 
-        const company = await Company.findById(companyId);
+        if (employeeCompanyId && employeeCompanyId !== effectiveCompanyId) {
+          return res.status(403).json({
+            message: "Employee does not belong to this company",
+          });
+        }
+
+        const company = await Company.findById(effectiveCompanyId);
         if (!company) {
           return res.status(404).json({
             message: "Invalid companyId",
           });
         }
 
-        const employee = await Employee.findOne({
+        const verifiedEmployee = await Employee.findOne({
           _id: userId,
-          createdBy: companyId,
+          createdBy: effectiveCompanyId,
         });
 
-        if (!employee) {
+        if (!verifiedEmployee) {
           return res.status(404).json({
             message: "User not found in this company",
           });
@@ -642,16 +666,16 @@ const updateUser = async (req, res) => {
         role = "employee";
 
         if (data?.fullName !== undefined)
-          employee.fullName = data.fullName;
+          verifiedEmployee.fullName = data.fullName;
 
         if (data?.contact !== undefined)
-          employee.contact = data.contact;
+          verifiedEmployee.contact = data.contact;
 
         if (data?.profileImage !== undefined)
-          employee.profileImage = data.profileImage;
+          verifiedEmployee.profileImage = data.profileImage;
 
-        user = await employee.save();
-        companyReference = companyId;
+        user = await verifiedEmployee.save();
+        companyReference = effectiveCompanyId || (verifiedEmployee.createdBy ? verifiedEmployee.createdBy.toString() : null);
       }
     }
 
@@ -705,36 +729,37 @@ const changePassword = async (req, res) => {
 
     // ===== 2️⃣ ADMIN =====
     else {
-      if (!companyId) {
-        return res.status(400).json({
-          message: "companyId is required",
-        });
-      }
+      const adminAccount = await Admin.findById(userId).select("companyId role");
 
-      const company = await Company.findById(companyId);
-      if (!company) {
-        return res.status(404).json({
-          message: "Invalid companyId",
-        });
-      }
+      if (adminAccount) {
+        // Fallback to the admin's stored companyId for self password change / settings flows
+        // (e.g. when client doesn't send companyId in the request body for admin settings).
+        const adminCompanyId = adminAccount.companyId ? adminAccount.companyId.toString() : null;
+        const effectiveCompanyId = companyId || adminCompanyId;
 
-      user = await Admin.findOne({
-        _id: userId,
-        email,
-        companyId,
-      });
+        if (!effectiveCompanyId) {
+          return res.status(400).json({
+            message: "companyId is required",
+          });
+        }
 
-      if (user) {
-        role = user.role || "admin";
-        companyReference = companyId;
-      }
+        if (adminCompanyId && adminCompanyId !== effectiveCompanyId) {
+          return res.status(403).json({
+            message: "Admin does not belong to this company",
+          });
+        }
 
-      // ===== 3️⃣ EMPLOYEE =====
-      else {
-        user = await Employee.findOne({
+        const company = await Company.findById(effectiveCompanyId);
+        if (!company) {
+          return res.status(404).json({
+            message: "Invalid companyId",
+          });
+        }
+
+        user = await Admin.findOne({
           _id: userId,
           email,
-          createdBy: companyId,
+          companyId: effectiveCompanyId,
         });
 
         if (!user) {
@@ -743,8 +768,55 @@ const changePassword = async (req, res) => {
           });
         }
 
-        role = user.role || "employee";
-        companyReference = companyId;
+        role = user.role || "admin";
+        companyReference = effectiveCompanyId;
+      } else {
+        // ===== 3️⃣ EMPLOYEE =====
+        // Fallback for employee self password change (companyId may be missing from body in settings flows)
+        const emp = await Employee.findById(userId);
+        if (!emp) {
+          return res.status(404).json({
+            message: "User not found",
+          });
+        }
+
+        const employeeCompanyId = emp.createdBy ? emp.createdBy.toString() : null;
+        const effectiveForEmp = companyId || employeeCompanyId;
+
+        if (!effectiveForEmp) {
+          return res.status(400).json({
+            message: "companyId is required",
+          });
+        }
+
+        if (employeeCompanyId && employeeCompanyId !== effectiveForEmp) {
+          return res.status(403).json({
+            message: "Employee does not belong to this company",
+          });
+        }
+
+        const companyEmp = await Company.findById(effectiveForEmp);
+        if (!companyEmp) {
+          return res.status(404).json({
+            message: "Invalid companyId",
+          });
+        }
+
+        const verifiedEmp = await Employee.findOne({
+          _id: userId,
+          email,
+          createdBy: effectiveForEmp,
+        });
+
+        if (!verifiedEmp) {
+          return res.status(404).json({
+            message: "User not found",
+          });
+        }
+
+        role = verifiedEmp.role || "employee";
+        companyReference = effectiveForEmp || (verifiedEmp.createdBy ? verifiedEmp.createdBy.toString() : null);
+        user = verifiedEmp;
       }
     }
 

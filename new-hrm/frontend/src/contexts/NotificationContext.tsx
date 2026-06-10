@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Notification } from "@/types/index";
 import { getNotificationData, markAsReadNotifications } from "@/services/Service";
+import { socket } from "@/socket/socket";
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -24,7 +24,6 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
   const { user } = useAuth();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [socket, setSocket] = useState<Socket | null>(null);
 
   const refreshNotifications = useCallback(async () => {
     if (!user?._id) return;
@@ -48,35 +47,44 @@ export const NotificationProvider = ({ children }: NotificationProviderProps) =>
     if (!user) {
       setNotifications([]);
       return;
-    };
+    }
 
     // Initial fetch
     refreshNotifications();
 
-    const socketClient: Socket = io(import.meta.env.VITE_API_URL, {
-      withCredentials: true,
-    });
-    setSocket(socketClient);
+    // Use the shared socket instance (connected in App.tsx after login)
+    // Join user-specific room for notifications (backend routes to socket.user.id)
+    if (!socket.connected) {
+      socket.connect();
+    }
+    socket.emit("joinRoom", user._id);
 
-    // Join user-specific room
-    socketClient.emit("joinRoom", user._id);
-
-    // Listen for notifications
-    socketClient.on("newNotification", (notification: Notification) => {
+    // Listen for notifications on the shared socket
+    const handleNewNotification = (notification: Notification) => {
       if (notification.userId === user._id) {
         if (notification?.type === "task") {
-          toast({ title: notification?.type, description: `${notification?.message} Assigned By ${notification?.createdBy?.username || notification?.createdBy?.fullName || "Admin"}`, className: "bg-yellow-600" });
-        }
-        else {
+          toast({
+            title: notification?.type,
+            description: `${notification?.message} Assigned By ${notification?.createdBy?.username || notification?.createdBy?.fullName || "Admin"}`,
+            className: "bg-yellow-600",
+          });
+        } else {
           toast({ title: notification?.type, description: notification?.message, className: "bg-yellow-600" });
         }
-        // Append new notification and set read: false
         setNotifications((prev) => [{ ...notification, read: false }, ...prev]);
       }
-    });
+    };
+
+    socket.on("newNotification", handleNewNotification);
+
+    const handleConnectError = (err: Error) => {
+      console.warn("Socket connection error (notifications):", err.message);
+    };
+    socket.on("connect_error", handleConnectError);
 
     return () => {
-      socketClient.disconnect();
+      socket.off("newNotification", handleNewNotification);
+      socket.off("connect_error", handleConnectError);
     };
   }, [user, toast, refreshNotifications]);
 

@@ -7,3 +7,7 @@ coverage/
 .env
 .DS_Store
 terminals/
+new-hrm/back/security-tests/config.local.json
+new-hrm/back/security-tests/evidence/runs/
+new-hrm/back/security-tests/evidence/pattern-library.json
+new-hrm/back/security-tests/evidence/reviews/

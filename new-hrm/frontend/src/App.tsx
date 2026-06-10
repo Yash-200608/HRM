@@ -107,14 +107,48 @@ const AppRoutes = () => {
 
   useEffect(() => {
     if (!user?._id) {
+      if (socket.connected) {
+        socket.disconnect();
+      }
       return;
     }
 
-    socket.connect();
+    // Pass token explicitly for the backend socket auth middleware
+    // (backend checks handshake.auth.token, authorization header, or accessToken cookie)
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      socket.auth = { token };
+    }
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
     socket.emit("joinRoom", user._id);
+
+    const handleConnect = () => {
+      console.log("Socket connected:", socket.id);
+      // Re-join room on reconnect
+      socket.emit("joinRoom", user._id);
+    };
+
+    const handleConnectError = (err: Error) => {
+      console.warn("Socket connection error:", err.message);
+    };
+
+    const handleDisconnect = (reason: string) => {
+      console.log("Socket disconnected:", reason);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on("disconnect", handleDisconnect);
 
     return () => {
       socket.off("joinRoom");
+      socket.off("connect", handleConnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off("disconnect", handleDisconnect);
     };
   }, [user?._id]);
   
@@ -424,7 +458,13 @@ element={
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-     <BrowserRouter basename="/">
+     <BrowserRouter
+      basename="/"
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
     <AuthProvider>
       <PreferencesProvider>
         <NotificationProvider>

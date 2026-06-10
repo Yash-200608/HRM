@@ -16,6 +16,7 @@ import { Helmet } from "react-helmet-async";
 import { getSetting, getCompanyDetail } from "@/redux-toolkit/slice/allPage/settingSlice";
 import { useAppDispatch, useAppSelector } from '@/redux-toolkit/hooks/hook';
 import { socket } from "@/socket/socket";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 export function formatDate(isoDate: string | null | undefined): string {
   if (!isoDate) return "-";
@@ -41,8 +42,8 @@ const Settings: React.FC = () => {
   const { t } = useTranslation();
 
   // const [userData, setUserData] = useState<any>(null);
-  const [newPassword, setNewPassword] = useState(null);
-  const [confirmPassword, setConfirmPassword] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [newPasswordShow, setNewPasswordShow] = useState(false);
   const [confirmPasswordShow, setConfirmPasswordShow] = useState(false);
   const [leaves, setLeaves] = useState({ totalLeave: "", specialLeave: "" })
@@ -76,6 +77,20 @@ const Settings: React.FC = () => {
   const userData = useAppSelector((state) => state.setting.setting);
   const companyDetail = useAppSelector((state) => state.setting?.companyDetail);
 
+  const resolveCompanyId = () => {
+    return (
+      resolveCompanyIdFromUser(user) ||
+      resolveCompanyIdFromUser(userData) ||
+      (() => {
+        try {
+          const ls = JSON.parse(localStorage.getItem("user") || "{}");
+          return resolveCompanyIdFromUser(ls);
+        } catch {
+          return null;
+        }
+      })()
+    );
+  };
 
   useEffect(() => {
     if (companyDetail !== null) {
@@ -110,12 +125,6 @@ const Settings: React.FC = () => {
       });
     }
   }, [userData]);
-
-  const resolveCompanyId = () => {
-    const companyId = user?.companyId;
-    if (!companyId) return user?.createdBy?._id || user?.createdBy || null;
-    return typeof companyId === "object" ? companyId._id : companyId;
-  };
 
   const handleUpdateCompanySettings = async () => {
     const companyId = resolveCompanyId();
@@ -215,8 +224,7 @@ const Settings: React.FC = () => {
   };
 
   const handleGetCompanyDetail = async () => {
-
-    const companyId = user?.companyId?._id || user?.createdBy?._id;
+    const companyId = resolveCompanyId();
     if (!companyId) return toast({ title: t("common.error"), description: t("settings.companyIdMissing"), variant: "destructive" })
     try {
       const res = await getCompanysById(companyId);
@@ -239,7 +247,8 @@ const Settings: React.FC = () => {
   const fetchUser = async () => {
     setPageLoading(true);
     try {
-      const res = await getSingleUser(user?._id, user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const companyCtx = resolveCompanyId() || (user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const res = await getSingleUser(user?._id, companyCtx);
       if (res.status === 200) {
         dispatch(getSetting(res.data.user));
         setSettingRefresh(false);
@@ -339,7 +348,8 @@ const Settings: React.FC = () => {
         };
       }
 
-      const res = await updateUser(user?._id, user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id, dataToSend);
+      const companyCtx = resolveCompanyId() || (user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const res = await updateUser(user?._id, companyCtx, dataToSend);
 
       if (res.status === 200) {
 
@@ -369,7 +379,8 @@ const Settings: React.FC = () => {
       toast({ title: t("common.error"), description: t("settings.passwordMismatch") }); return;
     }
     try {
-      const res = await updatePassword(user?._id, userData?.email, newPassword, user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const companyCtx = resolveCompanyId() || (user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      const res = await updatePassword(user?._id, userData?.email, newPassword, companyCtx);
       if (res.status === 200) {
         toast({ title: t("settings.passwordChanged"), description: res?.data?.message });
         setNewPassword("");
@@ -458,22 +469,47 @@ const Settings: React.FC = () => {
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="username">{t("common.fullName")}</Label>
-                    <Input id="username" value={formData.username} onChange={handleChange} />
+                    <Input
+                      id="username"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleChange}
+                      autoComplete="name"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="mobile">{t("common.phone")}</Label>
-                    <Input id="mobile" value={formData.mobile} maxLength={10} onChange={handleChange} />
+                    <Input
+                      id="mobile"
+                      name="mobile"
+                      value={formData.mobile}
+                      maxLength={10}
+                      onChange={handleChange}
+                      autoComplete="tel"
+                    />
                   </div>
                 </>
               ) : (
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="fullName">{t("common.fullName")}</Label>
-                    <Input id="fullName" value={formData.fullName} onChange={handleChange} />
+                    <Input
+                      id="fullName"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      autoComplete="name"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="contact">{t("common.phone")}</Label>
-                    <Input id="contact" value={formData.contact} onChange={handleChange} />
+                    <Input
+                      id="contact"
+                      name="contact"
+                      value={formData.contact}
+                      onChange={handleChange}
+                      autoComplete="tel"
+                    />
                   </div>
                 </>
               )}
@@ -481,14 +517,27 @@ const Settings: React.FC = () => {
                 <Label htmlFor="email">{t("common.email")}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="email" defaultValue={userData?.email} className="pl-10" disabled />
+                  <Input
+                    id="email"
+                    name="email"
+                    defaultValue={userData?.email}
+                    className="pl-10"
+                    disabled
+                    autoComplete="email"
+                  />
                 </div>
               </div>
 
               {user?.role === "employee" && (
                 <div className="space-y-2">
                   <Label htmlFor="department">{t("common.department")}</Label>
-                  <Input id="department" value={userData?.department?.name || ""} disabled />
+                  <Input
+                    id="department"
+                    name="department"
+                    value={userData?.department?.name || ""}
+                    disabled
+                    autoComplete="organization-title"
+                  />
                 </div>
               )}
             </div>
@@ -521,37 +570,65 @@ const Settings: React.FC = () => {
 
                 {/* Company Name */}
                 <div className="space-y-2">
-                  <Label>{t("common.companyName")}</Label>
+                  <Label htmlFor="companyName">{t("common.companyName")}</Label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.name} disabled className="pl-10" />
+                    <Input
+                      id="companyName"
+                      name="companyName"
+                      value={companyDetail?.name || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="organization"
+                    />
                   </div>
                 </div>
 
                 {/* Company Phone */}
                 <div className="space-y-2">
-                  <Label>{t("common.companyPhone")}</Label>
+                  <Label htmlFor="companyPhone">{t("common.companyPhone")}</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.contactNumber} disabled className="pl-10" />
+                    <Input
+                      id="companyPhone"
+                      name="companyPhone"
+                      value={companyDetail?.contactNumber || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="tel"
+                    />
                   </div>
                 </div>
 
                 {/* Company Email */}
                 <div className="space-y-2">
-                  <Label>{t("common.companyEmail")}</Label>
+                  <Label htmlFor="companyEmail">{t("common.companyEmail")}</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.email} disabled className="pl-10" />
+                    <Input
+                      id="companyEmail"
+                      name="companyEmail"
+                      value={companyDetail?.email || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="email"
+                    />
                   </div>
                 </div>
 
                 {/* Website */}
                 <div className="space-y-2">
-                  <Label>{t("common.websiteUrl")}</Label>
+                  <Label htmlFor="companyWebsite">{t("common.websiteUrl")}</Label>
                   <div className="relative">
                     <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input value={companyDetail?.website} disabled className="pl-10" />
+                    <Input
+                      id="companyWebsite"
+                      name="companyWebsite"
+                      value={companyDetail?.website || ""}
+                      disabled
+                      className="pl-10"
+                      autoComplete="url"
+                    />
                   </div>
                 </div>
 
@@ -575,26 +652,47 @@ const Settings: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                     <div className="space-y-2">
-                      <Label>{t("common.fullName")}</Label>
+                      <Label htmlFor="adminFullName">{t("common.fullName")}</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input value={companyDetail?.admins[0]?.username} disabled className="pl-10" />
+                        <Input
+                          id="adminFullName"
+                          name="adminFullName"
+                          value={companyDetail?.admins?.[0]?.username || ""}
+                          disabled
+                          className="pl-10"
+                          autoComplete="name"
+                        />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>{t("common.adminPhone")}</Label>
+                      <Label htmlFor="adminPhone">{t("common.adminPhone")}</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input value={companyDetail?.admins[0]?.mobile} disabled className="pl-10" />
+                        <Input
+                          id="adminPhone"
+                          name="adminPhone"
+                          value={companyDetail?.admins?.[0]?.mobile || ""}
+                          disabled
+                          className="pl-10"
+                          autoComplete="tel"
+                        />
                       </div>
                     </div>
 
                     <div className="space-y-2 md:col-span-2">
-                      <Label>{t("common.adminEmail")}</Label>
+                      <Label htmlFor="adminEmail">{t("common.adminEmail")}</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input value={userData?.email} disabled className="pl-10" />
+                        <Input
+                          id="adminEmail"
+                          name="adminEmail"
+                          value={userData?.email || ""}
+                          disabled
+                          className="pl-10"
+                          autoComplete="email"
+                        />
                       </div>
                     </div>
                   </div>
@@ -624,10 +722,12 @@ const Settings: React.FC = () => {
                   <Label htmlFor="totalLeaves">{t("settings.totalLeaves")}</Label>
                   <Input
                     id="totalLeaves"
+                    name="totalLeaves"
                     type="number"
                     value={leaves.totalLeave}
                     onChange={(e) => { setLeaves({ ...leaves, totalLeave: e.target.value }) }}
                     min={0}
+                    autoComplete="off"
                   />
                 </div>
 
@@ -635,10 +735,12 @@ const Settings: React.FC = () => {
                   <Label htmlFor="specialLeave">{t("settings.specialLeave")}</Label>
                   <Input
                     id="specialLeave"
+                    name="specialLeave"
                     type="number"
                     value={leaves.specialLeave}
                     onChange={(e) => { setLeaves({ ...leaves, specialLeave: e.target.value }) }}
                     min={0}
+                    autoComplete="off"
                   />
                 </div>
               </div>
@@ -667,9 +769,11 @@ const Settings: React.FC = () => {
                   <Label htmlFor="clockInTime">{t("settings.clockInTime")}</Label>
                   <Input
                     id="clockInTime"
+                    name="clockInTime"
                     type="time"
                     value={attendanceRules.clockInTime}
                     onChange={(e) => setAttendanceRules({ ...attendanceRules, clockInTime: e.target.value })}
+                    autoComplete="off"
                   />
                 </div>
 
@@ -677,10 +781,12 @@ const Settings: React.FC = () => {
                   <Label htmlFor="fullDayHours">{t("settings.fullDayHours")}</Label>
                   <Input
                     id="fullDayHours"
+                    name="fullDayHours"
                     type="number"
                     min={1}
                     value={attendanceRules.fullDayHours}
                     onChange={(e) => setAttendanceRules({ ...attendanceRules, fullDayHours: e.target.value })}
+                    autoComplete="off"
                   />
                 </div>
 
@@ -688,10 +794,12 @@ const Settings: React.FC = () => {
                   <Label htmlFor="halfDayHours">{t("settings.halfDayHours")}</Label>
                   <Input
                     id="halfDayHours"
+                    name="halfDayHours"
                     type="number"
                     min={1}
                     value={attendanceRules.halfDayHours}
                     onChange={(e) => setAttendanceRules({ ...attendanceRules, halfDayHours: e.target.value })}
+                    autoComplete="off"
                   />
                 </div>
               </div>
@@ -844,11 +952,13 @@ const Settings: React.FC = () => {
                 <div className="relative">
                   <Input
                     id="new-password"
+                    name="new-password"
                     value={newPassword}
                     type={newPasswordShow ? "text" : "password"}
                     placeholder="••••••••"
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="pr-10"
+                    autoComplete="new-password"
                   />
 
                   <button
@@ -868,11 +978,13 @@ const Settings: React.FC = () => {
                 <div className="relative">
                   <Input
                     id="confirm-password"
+                    name="confirm-password"
                     value={confirmPassword}
                     type={confirmPasswordShow ? "text" : "password"}
                     placeholder="••••••••"
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="pr-10"
+                    autoComplete="new-password"
                   />
 
                   <button
@@ -903,16 +1015,19 @@ const Settings: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Globe className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">{t("settings.language")}</p>
-                  <p className="text-sm text-muted-foreground">{t("settings.languageDesc")}</p>
-                </div>
+                <Label htmlFor="languageSelect" className="flex flex-col cursor-default">
+                  <span className="font-medium">{t("settings.language")}</span>
+                  <span className="text-sm text-muted-foreground">{t("settings.languageDesc")}</span>
+                </Label>
               </div>
               <select
+                id="languageSelect"
+                name="language"
                 className="px-3 py-2 rounded-md border bg-background"
                 value={preferences.language}
                 disabled={savingPreferences}
                 onChange={(e) => handleLanguageChange(e.target.value)}
+                autoComplete="language"
               >
                 {languageOptions.map((code) => (
                   <option key={code} value={code}>

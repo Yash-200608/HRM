@@ -65,6 +65,34 @@ if (!(window as any).__axiosInterceptorAdded) {
 
 const token = localStorage.getItem("accessToken");
 
+const getRequestId = (value: any): string | undefined => {
+  if (typeof value === "string") return value;
+  return value?.params?.id || value?.id || value?._id;
+};
+
+const getConfigWithoutId = (value: any) => {
+  if (!value || typeof value !== "object") return undefined;
+
+  const config = { ...value };
+  delete config.id;
+  delete config._id;
+
+  if (config.params) {
+    const { id, _id, ...params } = config.params;
+    config.params = params;
+  }
+
+  return config;
+};
+
+const getRequiredRequestId = (value: any, label: string) => {
+  const id = getRequestId(value);
+  if (!id) {
+    throw new Error(`${label} id is required`);
+  }
+  return id;
+};
+
 export const generatePDF = (expenses) => {
   const doc = new jsPDF();
 
@@ -973,18 +1001,14 @@ export const handleGetPdfLetter = async (employeeId: string) => {
       return [];
     }
 
-    // 3️⃣ API call
     const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/allLetter/${employeeId}`,
+      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/employee`,
       {
-        // headers: {
-        //   Authorization: `Bearer ${token}`,
-        //   "Content-Type": "application/json",
-        // },
+        params: { employeeId },
       },
     );
     if (response.status === 200) {
-      const data = response.data;
+      const data = response.data?.letters ?? response.data;
       return Array.isArray(data) ? data : [data];
     }
 
@@ -1007,16 +1031,9 @@ export const handleAddPdfLetter = async (
     // const token = localStorage.getItem("token");
     // if (!token) return { success: false, error: "No token found" };
 
-    // 2️⃣ API call
     const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/offer`,
+      `${import.meta.env.VITE_API_URL}/api/pdfGenerater/upload`,
       obj,
-      // {
-      //   headers: {
-      //     Authorization: `Bearer ${token}`,
-      //     "Content-Type": "application/json"
-      //   }
-      // }
     );
 
     if (response.status === 200) {
@@ -1098,9 +1115,10 @@ export const getAllCandidates = async () => {
 };
 
 export const getSingleCandidate = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Candidate");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/candidate/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/candidate/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1152,9 +1170,10 @@ export const getAllCompanyJob = async () => {
 };
 
 export const getSingleCompanyJob = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Company job");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/companyJob/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/companyJob/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1203,9 +1222,10 @@ export const getAllJob = async () => {
 };
 
 export const getSingleJob = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Job");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/job/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/job/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1263,9 +1283,10 @@ export const getAllApplication = async () => {
 };
 
 export const getSingleApplication = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Application");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/application/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/application/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1341,9 +1362,10 @@ export const getAllProduct = async () => {
 };
 
 export const getSingleProduct = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Product");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/product/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/product/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;
@@ -1384,9 +1406,10 @@ export const getAllLead = async (currentMonth) => {
 };
 
 export const getSingleLead = async (obj: any) => {
+  const id = getRequiredRequestId(obj, "Lead");
   const res = await axios.get(
-    `${import.meta.env.VITE_API_URL}/api/lead/getbyid`,
-    obj,
+    `${import.meta.env.VITE_API_URL}/api/lead/getbyid/${id}`,
+    getConfigWithoutId(obj),
   );
 
   return res;

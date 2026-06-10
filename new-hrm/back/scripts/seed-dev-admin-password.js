@@ -30,8 +30,26 @@ async function main() {
   admin.mfaEnrolledAt = null;
   await admin.save();
 
-  console.log(`Updated password for ${email}`);
-  console.log("Use this account for admin UI smoke tests and scripts/ui-audit.js");
+  if (admin.companyId) {
+    const Company = require("../models/personalOffice/companyModel");
+    const company = await Company.findById(admin.companyId);
+    if (company) {
+      const adminId = String(admin._id);
+      const admins = Array.isArray(company.admins) ? company.admins.map(String) : [];
+      if (!admins.includes(adminId)) {
+        company.admins = [...admins, adminId];
+        await company.save();
+        console.log(`Linked admin ${adminId} to company ${company.name}`);
+      }
+    }
+  }
+
+  console.log(`Updated password for ${email.toLowerCase()}`);
+  console.log(`Password: ${password}`);
+  console.log("Login at /admin/login (not the employee /login page).");
+  if (process.env.REQUIRE_ADMIN_MFA === "true") {
+    console.log("REQUIRE_ADMIN_MFA=true — after password succeeds you must complete MFA enrollment.");
+  }
   process.exit(0);
 }
 

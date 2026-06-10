@@ -8,6 +8,30 @@ const {
 const { createAuthSession } = require("./authSessionService.js");
 const { recordLoginSuccess } = require("./securityAuditService.js");
 
+function normalizeTenantRef(ref) {
+  if (!ref) {
+    return null;
+  }
+
+  if (typeof ref === "object") {
+    return String(ref._id || ref.id || ref);
+  }
+
+  return String(ref);
+}
+
+function normalizeUserDataForClient(userData, accountType) {
+  const normalized = { ...userData };
+
+  normalized.companyId = normalizeTenantRef(normalized.companyId);
+
+  if (accountType === "employee") {
+    normalized.createdBy = normalizeTenantRef(normalized.createdBy);
+  }
+
+  return normalized;
+}
+
 async function issueAuthenticatedSession(req, res, user, options = {}) {
   const accountType = options.accountType || getAccountTypeFromRole(user.role);
   const sessionId = options.sessionId || crypto.randomUUID();
@@ -40,10 +64,11 @@ async function issueAuthenticatedSession(req, res, user, options = {}) {
     mfaUsed: Boolean(options.mfaUsed),
   });
 
-  const userData = user.toObject();
-  delete userData.password;
-  delete userData.mfaSecret;
-  delete userData.mfaPendingSecret;
+  const rawUserData = user.toObject();
+  delete rawUserData.password;
+  delete rawUserData.mfaSecret;
+  delete rawUserData.mfaPendingSecret;
+  const userData = normalizeUserDataForClient(rawUserData, accountType);
 
   return {
     accessToken,
@@ -56,4 +81,5 @@ async function issueAuthenticatedSession(req, res, user, options = {}) {
 
 module.exports = {
   issueAuthenticatedSession,
+  normalizeUserDataForClient,
 };

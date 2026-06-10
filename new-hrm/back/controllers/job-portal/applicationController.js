@@ -2,6 +2,8 @@ const Application = require("../../models/job-portal/application"); // Path acco
 const Jobs = require("../../models/job-portal/jobs");
 const User = require("../../models/job-portal/candidate");
 
+const resolveRequestId = (req) => req.params.id || req.query.id || req.body.id;
+
 // =======================
 // Create a new application
 // =======================
@@ -85,7 +87,11 @@ const getApplications = async (req, res) => {
 // =======================
 const getApplicationById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = resolveRequestId(req);
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Application id is required." });
+    }
+
     const application = await Application.findById(id)
       .populate("job", "jobTitle companyName locationType")
       .populate("applicant", "name email");
@@ -137,7 +143,10 @@ const updateApplication = async (req, res) => {
 // =======================
 const deleteApplication = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = resolveRequestId(req);
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Application id is required." });
+    }
 
     const application = await Application.findById(id);
     if (!application || application.isDeleted) {

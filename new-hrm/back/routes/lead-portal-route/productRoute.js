@@ -13,6 +13,7 @@ const { access, mutation } = createPortalGuards("leadportal");
 router.post("/add", mutation, access, addProduct);
 router.get("/get", access, getProducts);
 router.get("/getbyid/:id", access, getProductById);
+router.get("/getbyid", access, getProductById);
 router.put("/update/:id", mutation, access, updateProduct);
 router.delete("/delete/:id", mutation, access, deleteProduct);
 

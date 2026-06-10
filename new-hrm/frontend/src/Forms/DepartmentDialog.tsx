@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 import axios from "axios";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -60,7 +61,8 @@ const DepartmentDialog: React.FC<DepartmentDialogProps> = ({
       return;
     }
 
-    else if (!user?.companyId?._id) {
+    const companyId = resolveCompanyIdFromUser(user);
+    if (!companyId) {
       toast({ title: "Error", description: "CompanyId Not Found." })
       return;
     }
@@ -68,7 +70,7 @@ const DepartmentDialog: React.FC<DepartmentDialogProps> = ({
     const obj = {
       name: name,
       description: description,
-      companyId: user?.companyId?._id,
+      companyId,
     };
     try {
       let res;

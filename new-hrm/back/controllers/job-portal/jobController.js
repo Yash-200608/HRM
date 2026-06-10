@@ -1,6 +1,8 @@
 const Jobs = require("../../models/job-portal/jobs");
 const { CompanyJob } = require("../../models/job-portal/companyJob.js")
 
+const resolveRequestId = (req) => req.params.id || req.query.id || req.body.id;
+
 
 const createJob = async (req, res) => {
   try {
@@ -101,7 +103,15 @@ const getAllJobs = async (req, res) => {
 
 const getSingleJob = async (req, res) => {
   try {
-    const job = await Jobs.findById(req.params.id)
+    const id = resolveRequestId(req);
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Job id is required",
+      });
+    }
+
+    const job = await Jobs.findById(id)
       .populate("postedBy", "name email");
 
     if (!job) {
@@ -167,7 +177,15 @@ const updateJob = async (req, res) => {
 
 const deleteJob = async (req, res) => {
   try {
-    const job = await Jobs.findById(req.params.id);
+    const id = resolveRequestId(req);
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Job id is required",
+      });
+    }
+
+    const job = await Jobs.findById(id);
 
     if (!job) {
       return res.status(404).json({

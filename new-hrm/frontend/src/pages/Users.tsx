@@ -20,6 +20,7 @@ import { getAdminList, getEmployeeList } from "@/redux-toolkit/slice/allPage/use
 import { useAppDispatch, useAppSelector } from '@/redux-toolkit/hooks/hook';
 import { socket } from "@/socket/socket";
 import { useTranslation } from "react-i18next";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 
 
@@ -66,13 +67,22 @@ const Users: React.FC = () => {
 
 
   const resolveCompanyId = () => {
-    const companyId = user?.companyId;
-    if (!companyId) return null;
-    return typeof companyId === "object" ? companyId._id : companyId;
+    const fromUser = resolveCompanyIdFromUser(user);
+    if (fromUser) {
+      return fromUser;
+    }
+
+    try {
+      const ls = JSON.parse(localStorage.getItem("user") || "{}");
+      return resolveCompanyIdFromUser(ls);
+    } catch {
+      return null;
+    }
   };
 
   const canAssignRoles =
     user?.role === "admin" ||
+    user?.role === "super_admin" ||
     (user as any)?.assignedRole?.permissions?.employees?.edit;
 
   const deduplicateRoles = (roleList: any[]) => {
@@ -96,7 +106,13 @@ const Users: React.FC = () => {
   };
 
   const loadRoles = async () => {
-    const companyId = resolveCompanyId();
+    let companyId = resolveCompanyId();
+    if (!companyId && user?.role === "super_admin" && userList.length > 0) {
+      // fallback for super_admin: pick company from first employee
+      const firstEmp = userList[0];
+      companyId = firstEmp?.companyId || firstEmp?.createdBy;
+      if (companyId && typeof companyId === "object") companyId = companyId._id;
+    }
     if (!companyId) return;
 
     try {
@@ -138,16 +154,20 @@ const Users: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (canAssignRoles && resolveCompanyId()) {
-      loadRoles();
+    if (canAssignRoles) {
+      const cId = resolveCompanyId();
+      if (cId || user?.role === "super_admin") {
+        loadRoles();
+      }
     }
-  }, [user, canAssignRoles]);
+  }, [user, canAssignRoles, userList.length]);
 
 
 
 
   const handleUpdateEmployeeStatus = async (id) => {
-    let obj = { adminId: user?._id, companyId: user?.companyId?._id, employeeId: id, status: "ACTIVE" }
+    const companyId = resolveCompanyId();
+    let obj = { adminId: user?._id, companyId, employeeId: id, status: "ACTIVE" }
     try {
       const res = await updateEmployeeStatus(obj);
       if (res.status === 200) {
@@ -162,12 +182,13 @@ const Users: React.FC = () => {
     }
   }
   const handleGetEmployee = async () => {
-    if (!user?.companyId?._id) {
+    const companyId = resolveCompanyId();
+    if (!companyId) {
       toast({ title: t("common.error"), description: t("users.companyIdMissing") })
       return;
     }
     try {
-      const data = await getEmployees(user?.companyId?._id);
+      const data = await getEmployees(companyId);
       if (Array.isArray(data)) {
         dispatch(getEmployeeList(data));
         setEmployeeListRefresh(false);
@@ -289,7 +310,7 @@ const Users: React.FC = () => {
         (l) => l.letterType === type
       );
 
-      if (!letter || !letter.pdfData) {
+      if (!letter || (!letter.pdfData && !letter.pdfUrl)) {
         toast({
           title: t("users.previewNotAvailable"),
           description: t("users.documentNotExist"),
@@ -298,13 +319,20 @@ const Users: React.FC = () => {
         return;
       }
 
-      const byteCharacters = atob(letter.pdfData);
-      const byteNumbers = Array.from(byteCharacters, c => c.charCodeAt(0));
-      const blob = new Blob([new Uint8Array(byteNumbers)], {
-        type: "application/pdf",
-      });
+      let url = "";
 
-      const url = URL.createObjectURL(blob);
+      if (letter.pdfUrl) {
+        url = letter.pdfUrl.startsWith("http")
+          ? letter.pdfUrl
+          : `${import.meta.env.VITE_API_URL}${letter.pdfUrl}`;
+      } else {
+        const byteCharacters = atob(letter.pdfData);
+        const byteNumbers = Array.from(byteCharacters, c => c.charCodeAt(0));
+        const blob = new Blob([new Uint8Array(byteNumbers)], {
+          type: "application/pdf",
+        });
+        url = URL.createObjectURL(blob);
+      }
 
       setPreviewDoc({
         name: letter.letterType,

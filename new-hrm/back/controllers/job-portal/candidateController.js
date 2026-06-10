@@ -2,6 +2,8 @@ const Candidate = require("../../models/job-portal/candidate");
 const { Admin } = require("../../models/personalOffice/authModel.js");
 const uploadToCloudinary = require("../../cloudinary/uploadToCloudinary.js");
 
+const resolveRequestId = (req) => req.params.id || req.query.id || req.body.id;
+
 // =============================
 // 1️⃣ Add Candidate
 // =============================
@@ -68,7 +70,15 @@ const getAllCandidates = async (req, res) => {
 // =============================
 const getSingleCandidate = async (req, res) => {
     try {
-        const candidate = await Candidate.findById(req.params.id);
+        const id = resolveRequestId(req);
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Candidate id is required",
+            });
+        }
+
+        const candidate = await Candidate.findById(id);
 
         if (!candidate) {
             return res.status(404).json({
