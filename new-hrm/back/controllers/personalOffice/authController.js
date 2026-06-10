@@ -286,7 +286,7 @@ const loginAdmin = async (req, res) => {
     // 1️⃣ Try Admin login
     user = await Admin.findOne({ email: normalizedEmail })
       .populate("companyId", "name logo")
-      .select("+password +mfaSecret");
+      .select("+password +mfaSecret +mfaPendingSecret");
 
     if (!user) {
       await recordLoginFailure(req, { email: normalizedEmail, reason: "invalid_email", accountType: "admin" });

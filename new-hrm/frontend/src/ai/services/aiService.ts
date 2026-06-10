@@ -182,18 +182,25 @@ export async function fetchAiConversation(conversationId: string) {
 }
 
 export async function fetchAiPolicy() {
-  const { data } = await axios.get<{ policy: AiPolicy }>("/api/ai/policy");
+  const { data } = await axios.get<{ policy: AiPolicy }>("/api/ai/policy", {
+    skipAuthRedirect: true,
+  } as Parameters<typeof axios.get>[1]);
   return data.policy;
 }
 
 export async function updateAiPolicy(policy: Partial<AiPolicy>) {
-  const { data } = await axios.put<{ policy: AiPolicy }>("/api/ai/policy", { policy });
+  const { data } = await axios.put<{ policy: AiPolicy }>(
+    "/api/ai/policy",
+    { policy },
+    { skipAuthRedirect: true } as Parameters<typeof axios.put>[2],
+  );
   return data.policy;
 }
 
 export async function fetchAiAdminAnalytics(windowDays = 30) {
   const { data } = await axios.get<{ analytics: AiAdminAnalytics }>("/api/ai/admin/analytics", {
     params: { windowDays },
-  });
+    skipAuthRedirect: true,
+  } as Parameters<typeof axios.get>[1]);
   return data.analytics;
 }

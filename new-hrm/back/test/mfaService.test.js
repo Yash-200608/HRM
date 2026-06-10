@@ -53,11 +53,19 @@ test("assessMfaAtLogin reports enrollment and challenge states", () => {
     }).status,
     "challenge_required"
   );
+  assert.equal(
+    assessMfaAtLogin({
+      role: "admin",
+      mfaEnabled: false,
+      mfaSecret: "SECRET",
+    }).status,
+    "challenge_required"
+  );
 
   process.env.REQUIRE_ADMIN_MFA = original;
 });
 
-test("shouldRequireMfa requires enabled secret and supported role", () => {
+test("shouldRequireMfa requires stored secret and supported role", () => {
   assert.equal(
     shouldRequireMfa({ role: "admin", mfaEnabled: true, mfaSecret: "SECRET" }),
     true
@@ -68,8 +76,24 @@ test("shouldRequireMfa requires enabled secret and supported role", () => {
   );
   assert.equal(
     shouldRequireMfa({ role: "admin", mfaEnabled: false, mfaSecret: "SECRET" }),
+    true
+  );
+  assert.equal(
+    shouldRequireMfa({ role: "admin", mfaEnabled: true, mfaSecret: null }),
     false
   );
+});
+
+test("isMfaEnrollmentRequired is false when MFA secret already exists", () => {
+  const original = process.env.REQUIRE_ADMIN_MFA;
+  process.env.REQUIRE_ADMIN_MFA = "true";
+
+  assert.equal(
+    isMfaEnrollmentRequired({ role: "admin", mfaEnabled: false, mfaSecret: "SECRET" }),
+    false
+  );
+
+  process.env.REQUIRE_ADMIN_MFA = original;
 });
 
 test("otplib verifies generated TOTP codes", () => {

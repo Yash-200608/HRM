@@ -62,7 +62,7 @@ const loginSuperAdmin = async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const user = await SuperAdmin.findOne({ email }).select("+password +mfaSecret");
+    const user = await SuperAdmin.findOne({ email }).select("+password +mfaSecret +mfaPendingSecret");
 
     if (!user) {
       await recordLoginFailure(req, { email, reason: "invalid_email", accountType: "super_admin" });

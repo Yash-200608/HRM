@@ -60,7 +60,9 @@ const MfaEnrollmentChallenge: React.FC<MfaEnrollmentChallengeProps> = ({
     return () => {
       active = false;
     };
-  }, [mfaEnrollmentToken, onCancel, toast]);
+    // Only re-run when the enrollment token changes — not on every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mfaEnrollmentToken]);
 
   const handleEnable = async (event: React.FormEvent) => {
     event.preventDefault();

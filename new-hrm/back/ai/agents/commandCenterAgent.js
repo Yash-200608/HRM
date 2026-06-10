@@ -1,4 +1,5 @@
 const { buildCommandCenterSystemPrompt } = require("../prompts/commandCenter.system.js");
+const { getToolDisplayLabel } = require("./toolDisplayLabels.js");
 
 const MAX_TOOL_ITERATIONS = 3;
 const MAX_TOOL_CALLS_PER_REQUEST = 5;
@@ -111,7 +112,7 @@ async function runCommandCenterAgent({
       if (result.success && result.data) {
         dataCards.push({
           type: call.name,
-          title: call.name,
+          title: getToolDisplayLabel(call.name),
           payload: result.data,
         });
       }

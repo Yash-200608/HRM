@@ -17,10 +17,10 @@ export default function AICommandCenter() {
             <h1 className="text-2xl font-semibold tracking-tight">AI Command Center</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Natural-language HR analytics, predictive intelligence, and controlled action
-            drafts across attendance, leave, payroll, workforce risk, subscription
-            seats, announcements, workflows, and performance. Actions require explicit
-            confirmation before execution.
+            Ask questions in plain English about attendance, leave, payroll, team
+            performance, and workforce risks. The assistant summarizes results in
+            simple tables and highlights. Any action it suggests must be reviewed
+            and approved by you first.
           </p>
         </div>
 

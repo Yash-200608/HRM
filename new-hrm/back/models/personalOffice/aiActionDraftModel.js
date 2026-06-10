@@ -56,7 +56,6 @@ const aiActionDraftSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
     executedAt: {
       type: Date,

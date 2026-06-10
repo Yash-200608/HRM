@@ -7,12 +7,13 @@ export const hasPermission = (
 ) => {
   if (!user) return false;
 
-  if (!canAccessModule(user, module)) {
-    return false;
-  }
-
+  // Org admins manage the full tenant; subscription gates apply on the API layer.
   if (user.role === "admin" || user.role === "super_admin") {
     return true;
+  }
+
+  if (!canAccessModule(user, module)) {
+    return false;
   }
 
   return !!user?.assignedRole?.permissions?.[module]?.[action];

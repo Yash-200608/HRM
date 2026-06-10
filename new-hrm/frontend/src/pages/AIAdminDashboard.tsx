@@ -21,7 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Shield, Sparkles, BarChart3 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, Shield, Sparkles, BarChart3, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AiPolicy,
@@ -29,6 +30,48 @@ import {
   fetchAiPolicy,
   updateAiPolicy,
 } from "@/ai/services/aiService";
+
+const DEFAULT_POLICY_MEMORY: AiPolicy["memory"] = {
+  enabled: true,
+  retentionDays: 30,
+  maxMessagesPerConversation: 50,
+  contextWindowMessages: 10,
+};
+
+const DEFAULT_EMPLOYEE_RESTRICTIONS: AiPolicy["employeeRestrictions"] = {
+  blockActionTools: true,
+  blockPredictiveIntelligence: true,
+  blockSeatUtilization: true,
+};
+
+function normalizePolicy(policy: AiPolicy): AiPolicy {
+  return {
+    ...policy,
+    memory: {
+      ...DEFAULT_POLICY_MEMORY,
+      ...(policy.memory || {}),
+    },
+    employeeRestrictions: {
+      ...DEFAULT_EMPLOYEE_RESTRICTIONS,
+      ...(policy.employeeRestrictions || {}),
+    },
+  };
+}
+
+function getQueryErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === "object" && "response" in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response;
+    if (response?.data?.message) {
+      return response.data.message;
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 export default function AIAdminDashboard() {
   const { toast } = useToast();
@@ -47,28 +90,31 @@ export default function AIAdminDashboard() {
 
   useEffect(() => {
     if (policyQuery.data) {
-      setPolicyDraft(policyQuery.data);
+      setPolicyDraft(normalizePolicy(policyQuery.data));
     }
   }, [policyQuery.data]);
 
   const policyMutation = useMutation({
     mutationFn: updateAiPolicy,
     onSuccess: (policy) => {
-      setPolicyDraft(policy);
+      setPolicyDraft(normalizePolicy(policy));
       queryClient.invalidateQueries({ queryKey: ["ai", "policy"] });
       queryClient.invalidateQueries({ queryKey: ["ai", "admin", "analytics"] });
       toast({ title: "AI policy updated" });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Failed to update AI policy",
+        description: getQueryErrorMessage(error, "Please try again."),
         variant: "destructive",
       });
     },
   });
 
   const analytics = analyticsQuery.data;
-  const isLoading = analyticsQuery.isLoading || policyQuery.isLoading;
+  const analyticsLoading = analyticsQuery.isPending;
+  const policyLoading = policyQuery.isPending;
+  const hasLoadError = analyticsQuery.isError || policyQuery.isError;
 
   return (
     <>
@@ -87,14 +133,39 @@ export default function AIAdminDashboard() {
           </p>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading AI admin data…
-          </div>
-        ) : (
-          <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {hasLoadError ? (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Unable to load AI admin data</AlertTitle>
+            <AlertDescription className="space-y-2">
+              {analyticsQuery.isError ? (
+                <p>{getQueryErrorMessage(analyticsQuery.error, "Analytics request failed.")}</p>
+              ) : null}
+              {policyQuery.isError ? (
+                <p>{getQueryErrorMessage(policyQuery.error, "Policy request failed.")}</p>
+              ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  analyticsQuery.refetch();
+                  policyQuery.refetch();
+                }}
+              >
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {analyticsLoading ? (
+            <div className="col-span-full flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading analytics…
+            </div>
+          ) : (
+            <>
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription>Queries (30d)</CardDescription>
@@ -123,18 +194,27 @@ export default function AIAdminDashboard() {
                   </CardTitle>
                 </CardHeader>
               </Card>
-            </div>
+            </>
+          )}
+        </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
-                    Usage breakdown
-                  </CardTitle>
-                  <CardDescription>Last {analytics?.windowDays ?? 30} days</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Usage breakdown
+              </CardTitle>
+              <CardDescription>Last {analytics?.windowDays ?? 30} days</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {analyticsLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading usage data…
+                </div>
+              ) : (
+                <>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -165,138 +245,147 @@ export default function AIAdminDashboard() {
                       ) : null}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Organization AI policy
-                  </CardTitle>
-                  <CardDescription>
-                    Control scopes, employee restrictions, and conversation memory.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {policyDraft ? (
-                    <>
-                      <div className="flex items-center justify-between rounded-lg border p-3">
-                        <div>
-                          <Label htmlFor="ai-enabled">AI enabled</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Disable to block all AI queries for this organization.
-                          </p>
-                        </div>
-                        <Switch
-                          id="ai-enabled"
-                          checked={policyDraft.enabled}
-                          onCheckedChange={(checked) =>
-                            setPolicyDraft({ ...policyDraft, enabled: checked })
-                          }
-                        />
-                      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Organization AI policy
+              </CardTitle>
+              <CardDescription>
+                Control scopes, employee restrictions, and conversation memory.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {policyLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading policy…
+                </div>
+              ) : policyDraft ? (
+                <>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <Label htmlFor="ai-enabled">AI enabled</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Disable to block all AI queries for this organization.
+                      </p>
+                    </div>
+                    <Switch
+                      id="ai-enabled"
+                      checked={policyDraft.enabled}
+                      onCheckedChange={(checked) =>
+                        setPolicyDraft({ ...policyDraft, enabled: checked })
+                      }
+                    />
+                  </div>
 
-                      <div className="flex items-center justify-between rounded-lg border p-3">
-                        <div>
-                          <Label htmlFor="memory-enabled">Conversation memory</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Persist tenant-scoped chat history for context windows.
-                          </p>
-                        </div>
-                        <Switch
-                          id="memory-enabled"
-                          checked={policyDraft.memory.enabled}
-                          onCheckedChange={(checked) =>
-                            setPolicyDraft({
-                              ...policyDraft,
-                              memory: { ...policyDraft.memory, enabled: checked },
-                            })
-                          }
-                        />
-                      </div>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <Label htmlFor="memory-enabled">Conversation memory</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Persist tenant-scoped chat history for context windows.
+                      </p>
+                    </div>
+                    <Switch
+                      id="memory-enabled"
+                      checked={policyDraft.memory.enabled}
+                      onCheckedChange={(checked) =>
+                        setPolicyDraft({
+                          ...policyDraft,
+                          memory: { ...policyDraft.memory, enabled: checked },
+                        })
+                      }
+                    />
+                  </div>
 
-                      <div className="grid gap-2">
-                        <Label htmlFor="retention-days">Retention (days)</Label>
-                        <Input
-                          id="retention-days"
-                          type="number"
-                          min={1}
-                          max={365}
-                          value={policyDraft.memory.retentionDays}
-                          onChange={(e) =>
-                            setPolicyDraft({
-                              ...policyDraft,
-                              memory: {
-                                ...policyDraft.memory,
-                                retentionDays: Number(e.target.value) || 30,
-                              },
-                            })
-                          }
-                        />
-                      </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="retention-days">Retention (days)</Label>
+                    <Input
+                      id="retention-days"
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={policyDraft.memory.retentionDays}
+                      onChange={(e) =>
+                        setPolicyDraft({
+                          ...policyDraft,
+                          memory: {
+                            ...policyDraft.memory,
+                            retentionDays: Number(e.target.value) || 30,
+                          },
+                        })
+                      }
+                    />
+                  </div>
 
-                      <div className="grid gap-2">
-                        <Label htmlFor="context-window">Context window messages</Label>
-                        <Input
-                          id="context-window"
-                          type="number"
-                          min={0}
-                          max={30}
-                          value={policyDraft.memory.contextWindowMessages}
-                          onChange={(e) =>
-                            setPolicyDraft({
-                              ...policyDraft,
-                              memory: {
-                                ...policyDraft.memory,
-                                contextWindowMessages: Number(e.target.value) || 0,
-                              },
-                            })
-                          }
-                        />
-                      </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="context-window">Context window messages</Label>
+                    <Input
+                      id="context-window"
+                      type="number"
+                      min={0}
+                      max={30}
+                      value={policyDraft.memory.contextWindowMessages}
+                      onChange={(e) =>
+                        setPolicyDraft({
+                          ...policyDraft,
+                          memory: {
+                            ...policyDraft.memory,
+                            contextWindowMessages: Number(e.target.value) || 0,
+                          },
+                        })
+                      }
+                    />
+                  </div>
 
-                      <div className="flex items-center justify-between rounded-lg border p-3">
-                        <div>
-                          <Label>Employee action tools</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Block draft/confirm action tools for employee roles.
-                          </p>
-                        </div>
-                        <Switch
-                          checked={policyDraft.employeeRestrictions.blockActionTools}
-                          onCheckedChange={(checked) =>
-                            setPolicyDraft({
-                              ...policyDraft,
-                              employeeRestrictions: {
-                                ...policyDraft.employeeRestrictions,
-                                blockActionTools: checked,
-                              },
-                            })
-                          }
-                        />
-                      </div>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <Label>Employee action tools</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Block draft/confirm action tools for employee roles.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={policyDraft.employeeRestrictions.blockActionTools}
+                      onCheckedChange={(checked) =>
+                        setPolicyDraft({
+                          ...policyDraft,
+                          employeeRestrictions: {
+                            ...policyDraft.employeeRestrictions,
+                            blockActionTools: checked,
+                          },
+                        })
+                      }
+                    />
+                  </div>
 
-                      <Button
-                        onClick={() => policyMutation.mutate(policyDraft)}
-                        disabled={policyMutation.isPending}
-                      >
-                        {policyMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving…
-                          </>
-                        ) : (
-                          "Save policy"
-                        )}
-                      </Button>
-                    </>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
+                  <Button
+                    onClick={() => policyMutation.mutate(policyDraft)}
+                    disabled={policyMutation.isPending}
+                  >
+                    {policyMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      "Save policy"
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Policy settings are unavailable right now.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </>
   );

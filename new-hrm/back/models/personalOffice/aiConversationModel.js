@@ -55,7 +55,6 @@ const aiConversationSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
   },
   { timestamps: true, versionKey: false }

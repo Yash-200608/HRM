@@ -72,7 +72,7 @@ export const defaultPlans: PlanDefinition[] = [
     priceMonthly: 2499,
     priceYearly: 24990,
     currency: 'INR',
-    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true },
+    features: { ...baseFeatures, payroll: true, taskManagement: true, employeeSelfService: true, announcements: true, shiftManagement: true, advancedReports: true, employeeDocuments: true, customFields: true, dataExport: true, approvalWorkflows: true, aiAssistant: true },
   },
   {
     code: 'professional',

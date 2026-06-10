@@ -258,19 +258,20 @@ async function beginMfaSetupForEnrollment(enrollmentToken) {
     throw error;
   }
 
-  if (account.mfaEnabled) {
+  if (account.mfaEnabled || account.mfaSecret) {
     const error = new Error("MFA is already enabled for this account");
     error.status = 400;
     throw error;
   }
 
-  const pendingSecret = generateSecret();
-  account.mfaPendingSecret = pendingSecret;
-  await account.save();
+  if (!account.mfaPendingSecret) {
+    account.mfaPendingSecret = generateSecret();
+    await account.save();
+  }
 
   return {
-    secret: pendingSecret,
-    otpauthUrl: buildOtpAuthUrl(account.email, pendingSecret),
+    secret: account.mfaPendingSecret,
+    otpauthUrl: buildOtpAuthUrl(account.email, account.mfaPendingSecret),
     issuer: MFA_ISSUER,
   };
 }
@@ -345,20 +346,28 @@ function isMfaMandatoryForRole(role) {
 }
 
 function isMfaEnrollmentRequired(account) {
-  return isMfaMandatoryForRole(account?.role) && !account?.mfaEnabled;
+  if (!isMfaMandatoryForRole(account?.role)) {
+    return false;
+  }
+
+  if (account?.mfaSecret) {
+    return false;
+  }
+
+  return !account?.mfaEnabled;
 }
 
 function shouldRequireMfa(account) {
-  return Boolean(account?.mfaEnabled && account?.mfaSecret && isMfaRole(account.role));
+  return Boolean(account?.mfaSecret && isMfaRole(account.role));
 }
 
 function assessMfaAtLogin(account) {
-  if (isMfaEnrollmentRequired(account)) {
-    return { status: "enrollment_required" };
-  }
-
   if (shouldRequireMfa(account)) {
     return { status: "challenge_required" };
+  }
+
+  if (isMfaEnrollmentRequired(account)) {
+    return { status: "enrollment_required" };
   }
 
   return { status: "not_required" };

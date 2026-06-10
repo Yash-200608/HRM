@@ -104,6 +104,24 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
+const AdminAiRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, initializing } = useAuth();
+
+  if (initializing) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary" />
+      </div>
+    );
+  }
+
+  if (user?.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 const AppRoutes = () => {
   const { user, isAuthenticated, initializing } = useAuth();
   const navigate = useNavigate();
@@ -419,13 +437,9 @@ element={
 <Route
   path="/ai/admin"
   element={
-    user?.role === "admin" || user?.role === "super_admin" ? (
-      <PermissionRoute module="ai" action="view">
-        <AIAdminDashboard />
-      </PermissionRoute>
-    ) : (
-      <Navigate to="/dashboard" replace />
-    )
+    <AdminAiRoute>
+      <AIAdminDashboard />
+    </AdminAiRoute>
   }
 />
 

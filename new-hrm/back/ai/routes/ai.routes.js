@@ -45,7 +45,7 @@ const commandCenterGuards = [
   authMiddleware,
   aiFeatureGate,
   getAiQueryLimiter(),
-  requireAiAssistant,
+  requireAiAssistant(),
   aiTenantGuard,
   aiPolicyGuard(),
   aiPermissionGuard("commandCenter"),
@@ -54,7 +54,7 @@ const commandCenterGuards = [
 const aiReadGuards = [
   authMiddleware,
   aiFeatureGate,
-  requireAiAssistant,
+  requireAiAssistant(),
   aiTenantGuard,
   aiPolicyGuard(),
   aiPermissionGuard("commandCenter"),
@@ -63,10 +63,7 @@ const aiReadGuards = [
 const aiAdminGuards = [
   authMiddleware,
   aiFeatureGate,
-  requireAiAssistant,
   aiTenantGuard,
-  aiPolicyGuard(),
-  aiPermissionGuard("commandCenter"),
   aiAdminGuard(),
 ];
 
@@ -77,7 +74,7 @@ router.get("/health", authMiddleware, aiPermissionGuard("commandCenter"), health
 const actionMutationGuards = [
   authMiddleware,
   aiFeatureGate,
-  requireAiAssistant,
+  requireAiAssistant(),
   aiTenantGuard,
   aiPolicyGuard(),
   aiPermissionGuard("commandCenter"),

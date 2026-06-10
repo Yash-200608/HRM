@@ -37,8 +37,9 @@ export default function AIChatPanel() {
       <div className="min-h-[320px] flex-1 space-y-4 overflow-y-auto rounded-lg border bg-muted/20 p-4">
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Ask natural-language HR questions. Analytics are read-only;
-            proposed actions require your confirmation before execution.
+            Try asking: &quot;Who has low attendance this month?&quot; or
+            &quot;Show pending leave requests.&quot; Results appear as a short
+            summary with an easy-to-read table below.
           </p>
         ) : (
           messages.map((message) => (
