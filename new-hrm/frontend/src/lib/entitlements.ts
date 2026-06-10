@@ -35,6 +35,8 @@ const MODULE_TO_ENTITLEMENT: Record<string, string> = {
   performance: "performanceReviews",
   assets: "assetManagement",
   learning: "learningManagement",
+  ai: "aiAssistant",
+  command_center: "aiAssistant",
 };
 
 export function resolveModuleEntitlement(moduleName?: string | null) {

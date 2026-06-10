@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, Users, Building2, User, IndianRupee, FolderKanban, Clock, CalendarDays, Receipt, Wallet, Bell, BarChart3, Settings, LogOut, Briefcase, CreditCard, TrendingUp, Shield, Target, Package, GraduationCap, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, User, IndianRupee, FolderKanban, Clock, CalendarDays, Receipt, Wallet, Bell, BarChart3, Settings, LogOut, Briefcase, CreditCard, TrendingUp, Shield, Target, Package, GraduationCap, Activity, Sparkles } from 'lucide-react';
 import { FileText } from "lucide-react";
 
 //  strong password check k liye hai y 
@@ -464,6 +464,20 @@ export const navItems: NavItem[] = [
     label: 'Reports',
     path: '/reports',
     module: 'reports'
+  },
+
+  {
+    icon: Sparkles,
+    label: 'AI Command Center',
+    path: '/ai/command-center',
+    module: 'ai'
+  },
+
+  {
+    icon: Shield,
+    label: 'AI Admin',
+    path: '/ai/admin',
+    module: 'ai_admin'
   },
 
   {

@@ -58,6 +58,7 @@ const ENTITLEMENT_KEYS = Object.freeze([
   "leadPortal",
   "prioritySupport",
   "customIntegrations",
+  "aiAssistant",
 ]);
 
 /**
@@ -99,6 +100,8 @@ const HRM_MODULE_TO_ENTITLEMENT = Object.freeze({
   performance: "performanceReviews",
   assets: "assetManagement",
   learning: "learningManagement",
+  ai: "aiAssistant",
+  command_center: "aiAssistant",
 });
 
 const COMPANY_STATUS_VALUES = Object.freeze(["ACTIVE", "SUSPENDED", "ARCHIVED", "PURGED"]);

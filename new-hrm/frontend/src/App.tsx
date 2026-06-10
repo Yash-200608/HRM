@@ -67,6 +67,10 @@ import Performance from "./pages/Performance";
 import MyPerformance from "./pages/MyPerformance";
 import Assets from "./pages/Assets";
 import Learning from "./pages/Learning";
+import AICommandCenter from "./pages/AICommandCenter";
+import AIAdminDashboard from "./pages/AIAdminDashboard";
+import { hasEntitlement } from "@/lib/entitlements";
+import { hasPermission } from "@/lib/permissions";
 
 
 
@@ -394,6 +398,34 @@ element={
     <PermissionRoute module="learning" action="view">
       <Learning />
     </PermissionRoute>
+  }
+/>
+
+<Route
+  path="/ai/command-center"
+  element={
+    user?.role === "admin" || user?.role === "super_admin" ? (
+      <PermissionRoute module="ai" action="view">
+        <AICommandCenter />
+      </PermissionRoute>
+    ) : user && hasPermission(user, "reports", "view") && hasEntitlement(user, "aiAssistant") ? (
+      <AICommandCenter />
+    ) : (
+      <Navigate to="/dashboard" replace />
+    )
+  }
+/>
+
+<Route
+  path="/ai/admin"
+  element={
+    user?.role === "admin" || user?.role === "super_admin" ? (
+      <PermissionRoute module="ai" action="view">
+        <AIAdminDashboard />
+      </PermissionRoute>
+    ) : (
+      <Navigate to="/dashboard" replace />
+    )
   }
 />
 

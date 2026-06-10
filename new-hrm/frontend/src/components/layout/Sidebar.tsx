@@ -131,11 +131,18 @@ const filteredNavItems = navItems.filter((item) => {
 
   // SUPER ADMIN
   if (user?.role === "super_admin") {
+    if (item.module === "ai_admin") {
+      return false;
+    }
     return ["dashboard", "companies", "admins", "platform_revenue", "platform_ops", "security", "setting"].includes(item.module);
   }
 
   // ADMIN
   if (user?.role === "admin") {
+
+    if (item.module === "ai_admin") {
+      return true;
+    }
 
     // hide super admin modules
     if (["companies", "admins", "platform_revenue", "platform_ops"].includes(item.module)) {

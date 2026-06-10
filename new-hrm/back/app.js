@@ -63,6 +63,7 @@ const swaggerSpec = require("./swagger");
 const cookieParser = require("cookie-parser");
 const { initSocket } = require("./socketHelpers.js");
 const monthlyAttendanceRoutes = require("./routes/monthlyAttendanceRoutes");
+const aiRoutes = require("./ai/routes/ai.routes.js");
 
 
 // Load env
@@ -137,6 +138,9 @@ app.use("/api/superAdmin/auth", superAdminRoutes);
 app.use("/api/platform", platformRoutes);
 app.use("/api/billing", billingOverviewRoutes);
 app.use("/api/compliance", complianceRoutes);
+if (process.env.AI_ENABLED !== "false") {
+  app.use("/api/ai", aiRoutes);
+}
 app.use("/api/performance", performanceRoutes);
 app.use("/api/assets", assetRoutes);
 app.use("/api/learning", learningRoutes);

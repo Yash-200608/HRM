@@ -16,4 +16,6 @@ test("shared-types exposes entitlement keys and module mapping", () => {
   assert.equal(resolveModuleEntitlement("performance"), "performanceReviews");
   assert.equal(resolveModuleEntitlement("assets"), "assetManagement");
   assert.equal(resolveModuleEntitlement("learning"), "learningManagement");
+  assert.ok(ENTITLEMENT_KEYS.includes("aiAssistant"));
+  assert.equal(resolveModuleEntitlement("ai"), "aiAssistant");
 });
