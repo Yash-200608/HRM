@@ -17,9 +17,11 @@ import { Helmet } from "react-helmet-async";
 import { getLeaveTypes, getLeaveRequests } from "@/redux-toolkit/slice/allPage/leaveSlice";
 import { useAppDispatch, useAppSelector } from '@/redux-toolkit/hooks/hook';
 import { socket } from "@/socket/socket";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 const Leave: React.FC = () => {
   const { user } = useAuth();
+  const companyId = resolveCompanyIdFromUser(user);
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [leaveTypeOpenForm, setLeaveTypeOpenForm] = useState(false);
@@ -56,11 +58,11 @@ const Leave: React.FC = () => {
 
 
   const handleGetUserDashboard = async () => {
-  const companyId = user?.companyId?._id;
+  if (!companyId || !user?._id) return;
 
   const obj = {
     companyId,
-    userId: user?._id
+    userId: user._id,
   };
 
   try {
@@ -77,12 +79,13 @@ const Leave: React.FC = () => {
     if (user?.role === "employee" || allLeaveRequestRefresh || allLeaveRequests.length === 0) {
       handleGetUserDashboard();
     }
-  }, [allLeaveRequestRefresh, user?.role, allLeaveRequests.length])
+  }, [allLeaveRequestRefresh, user?.role, allLeaveRequests.length, companyId, user?._id])
 
   const handleGetleaveTypes = async () => {
     try {
       setPageLoading(true);
-      const response = await getleaveTypes(user?.role === "employee" ? user?.createdBy?._id : user?.companyId?._id);
+      if (!companyId) return;
+      const response = await getleaveTypes(companyId);
       if (response.status === 200) {
         // setLeaveTypes(response?.data?.leaves);
         dispatch(getLeaveTypes(response?.data?.leaves));
@@ -105,15 +108,12 @@ const Leave: React.FC = () => {
   user?.role === "admin" ||
   (user as any)?.assignedRole?.permissions?.leave?.view
 ) {
-  response = await getleaveRequests(
-    user?.companyId?._id || user?.createdBy?._id
-  );
+  if (!companyId) return;
+  response = await getleaveRequests(companyId);
 }
 else if (user?.role === "employee") {
-  response = await getSingleleaveRequests(
-    user?._id,
-    user?.createdBy?._id
-  );
+  if (!companyId || !user?._id) return;
+  response = await getSingleleaveRequests(user._id, companyId);
 }
       if (response.status === 200) {
         // setAllLeaveRequests(response?.data?.requests);
@@ -147,7 +147,7 @@ else if (user?.role === "employee") {
       // Update last seen notifications count
       lastNotificationCount.current = notifications?.length || 0;
     }
-  }, [user?._id, leaveTypeRefresh, allLeaveRequests.length, allLeaveRequestRefresh, leaveTypes.length, notifications?.length]);
+  }, [user?._id, leaveTypeRefresh, allLeaveRequests.length, allLeaveRequestRefresh, leaveTypes.length, notifications?.length, companyId]);
 
 
   const handleDeleteClick = (leaveTypeId) => {
@@ -162,7 +162,8 @@ else if (user?.role === "employee") {
     };
     setIsDeleting(true);
     try {
-      const response = await leaveDelete(selectedLeaveTypeId, user?.companyId?._id);
+      if (!companyId) return;
+      const response = await leaveDelete(selectedLeaveTypeId, companyId);
       if (response.status === 200) {
         setLeaveTypeRefresh(true);
         toast({
@@ -180,9 +181,9 @@ else if (user?.role === "employee") {
   };
 
   const handleStatusChange = async (newStatus: string, request) => {
-    if (!request?.user?._id && !newStatus || !user?.companyId?._id || !user?._id) return;
+    if (!request?.user?._id && !newStatus || !companyId || !user?._id) return;
     try {
-      const response = await leaveStatusChange(newStatus, request, user?.companyId?._id, user?._id);
+      const response = await leaveStatusChange(newStatus, request, companyId, user._id);
       if (response.status === 200) {
         setAllLeaveRequestRefresh(true);
         handleGetUserDashboard();

@@ -81,6 +81,8 @@ router.post("/apply", leaveMutationGuard, leaveAccess, applyLeave);
  *         description: List of leave requests
  */
 router.get("/my/:userId", leaveAccess, getMyLeaveRequests);
+router.get("/my/:userId/date", leaveAccess, getMyLeaveRequestsByDate);
+router.get("/leave/dashboard", leaveAccess, getEmployeeLeaveSummary);
 
 /**
  * @swagger
@@ -115,8 +117,6 @@ router.get("/:companyId", leaveAccess, getAllLeaveRequests);
  *         description: Leave request details
  */
 router.get("/:id", leaveAccess, getLeaveRequestById);
-router.get("/my/:userId/date", leaveAccess, getMyLeaveRequestsByDate);
-router.get("/leave/dashboard", leaveAccess, getEmployeeLeaveSummary);
 
 /**
  * @swagger

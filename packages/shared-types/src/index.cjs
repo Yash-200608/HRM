@@ -95,7 +95,7 @@ const HRM_MODULE_TO_ENTITLEMENT = Object.freeze({
   lead_list: "leadPortal",
   lead_orders: "leadPortal",
   lead_products: "leadPortal",
-  expenses: "approvalWorkflows",
+  expenses: "basicReports",
   holiday: "leaveManagement",
   performance: "performanceReviews",
   assets: "assetManagement",

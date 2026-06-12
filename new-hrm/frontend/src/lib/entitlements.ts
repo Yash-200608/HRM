@@ -30,7 +30,7 @@ const MODULE_TO_ENTITLEMENT: Record<string, string> = {
   lead_list: "leadPortal",
   lead_orders: "leadPortal",
   lead_products: "leadPortal",
-  expenses: "approvalWorkflows",
+  expenses: "basicReports",
   holiday: "leaveManagement",
   performance: "performanceReviews",
   assets: "assetManagement",
@@ -60,7 +60,12 @@ export function getUserEntitlements(
     return user.entitlements;
   }
 
-  const plan = (user?.subscriptionPlan || "free").toLowerCase();
+  const tokenClaims = readEntitlementsFromAccessToken();
+  if (tokenClaims.entitlements.length > 0) {
+    return tokenClaims.entitlements;
+  }
+
+  const plan = (user?.subscriptionPlan || tokenClaims.subscriptionPlan || "free").toLowerCase();
   if (plan === "free") {
     return [...FREE_TIER_ENTITLEMENTS];
   }

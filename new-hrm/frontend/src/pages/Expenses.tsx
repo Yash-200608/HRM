@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Helmet } from "react-helmet-async";
 import { useAppDispatch, useAppSelector } from '@/redux-toolkit/hooks/hook';
 import { getExpense, getExpenseCategory } from '@/redux-toolkit/slice/allPage/expenseSlice';
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 
 const months = Array.from({ length: 12 }, (_, i) => {
@@ -40,6 +41,7 @@ const currentYear = new Date().getFullYear().toString();
 
 export default function Expenses() {
     const { user } = useAuth();
+    const companyId = resolveCompanyIdFromUser(user);
 
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>("all");
@@ -66,7 +68,8 @@ export default function Expenses() {
   const handleGetCategory = async() => {
     setPageLoading(true);
     try {
-    const res = await getExpenseCategories(user?.companyId?._id);
+    if (!companyId) return;
+    const res = await getExpenseCategories(companyId);
     if(res)
     {
       dispatch(getExpenseCategory(res));
@@ -84,7 +87,8 @@ export default function Expenses() {
   const handleGetExpenses = async() => {
     setPageLoading(true);
     try {
-    const res = await getExpenses(user?.companyId?._id);
+    if (!companyId) return;
+    const res = await getExpenses(companyId);
     if(res)
     {
       dispatch(getExpense(res));
@@ -112,7 +116,7 @@ export default function Expenses() {
     handleGetCategory();
   }
 
-}, [categoryListRefresh, categoriesList.length, user]);
+}, [categoryListRefresh, categoriesList.length, user, companyId]);
 
  useEffect(() => {
 
@@ -127,7 +131,7 @@ export default function Expenses() {
     handleGetExpenses();
   }
 
-}, [expenseListRefresh, expenseList.length, user]);
+}, [expenseListRefresh, expenseList.length, user, companyId]);
 
   
   const handleDeleteClick = (expenseId) => {
@@ -139,7 +143,7 @@ export default function Expenses() {
     if(!selectedExpenseId) {toast({ title: "Error", description: "Expense ID not found.", variant: "destructive" }); return; }
     setIsDeleting(true);
     try {
-        const res = await axios.delete( `${import.meta.env.VITE_API_URL}/api/expenses/deleteExpense/${selectedExpenseId}`,{data : {companyId : user?.companyId?._id}});
+        const res = await axios.delete( `${import.meta.env.VITE_API_URL}/api/expenses/deleteExpense/${selectedExpenseId}`,{data : {companyId}});
         if(res?.status === 200){
           toast({ title: "Expense Deleted.", description: res?.data?.message });
           setExpenseListRefresh(true);

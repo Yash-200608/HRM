@@ -13,9 +13,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAppDispatch, useAppSelector } from "@/redux-toolkit/hooks/hook";
 import { getLeaveTypes } from "@/redux-toolkit/slice/allPage/leaveSlice";
 import { socket } from "@/socket/socket";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 const ApplyLeaveDialog = ({ open, onOpenChange, mode, initialData, setLeaveTypeRefresh}) => {
   const { user } = useAuth();
+  const companyId = resolveCompanyIdFromUser(user);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   // const [leaveTypes, setLeaveTypes] = useState([]);
@@ -25,7 +27,7 @@ const ApplyLeaveDialog = ({ open, onOpenChange, mode, initialData, setLeaveTypeR
     toDate: "",
     description: "",
     userId: user?._id,
-    companyId: user?.createdBy?._id
+    companyId: companyId || ""
   });
   const today = new Date().toISOString().split("T")[0];
   const startDateRef = useRef(null);
@@ -40,7 +42,7 @@ const ApplyLeaveDialog = ({ open, onOpenChange, mode, initialData, setLeaveTypeR
       toDate: "",
       description: "",
       userId: user?._id,
-      companyId: user?.createdBy?._id
+      companyId: companyId || ""
     });
   };
 
@@ -55,7 +57,7 @@ const ApplyLeaveDialog = ({ open, onOpenChange, mode, initialData, setLeaveTypeR
         toDate: initialData.endDate || "",
         description: initialData.description || "",
         userId: initialData.userId || "",
-        companyId: user?.createdBy?._id
+        companyId: companyId || ""
       });
     }
   }, [mode, initialData]);
@@ -65,7 +67,8 @@ const ApplyLeaveDialog = ({ open, onOpenChange, mode, initialData, setLeaveTypeR
   };
   const handleGetLeaveType = async () => {
     try {
-      const res = await getleaveTypes(user?.createdBy?._id);
+      if (!companyId) return;
+      const res = await getleaveTypes(companyId);
       dispatch(getLeaveTypes(Array.isArray(res?.data?.leaves) ? res?.data?.leaves : []));
       // setLeaveTypes(Array.isArray(res?.data?.leaves) ? res?.data?.leaves : []);
     }
@@ -74,10 +77,10 @@ const ApplyLeaveDialog = ({ open, onOpenChange, mode, initialData, setLeaveTypeR
     }
   }
   useEffect(() => {
-    if(user?.createdBy?._id && leaveTypes?.length === 0){
+    if (companyId && leaveTypes?.length === 0) {
     handleGetLeaveType();
     }
-  }, [user?.createdBy?._id, leaveTypes?.length]);
+  }, [companyId, leaveTypes?.length]);
 
   useEffect(() => {
               socket.on("getLeaveRefresh", () => {

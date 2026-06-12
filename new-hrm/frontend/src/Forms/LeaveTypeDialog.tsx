@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import axios from 'axios';
 import { useAuth } from "@/contexts/AuthContext";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 import { socket } from "@/socket/socket";
 
 export interface LeaveTypeFormData {
@@ -45,6 +46,7 @@ setLeaveTypeRefresh
     color: '#0d6efd',
   });
   const { user } = useAuth();
+  const companyId = resolveCompanyIdFromUser(user);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -80,7 +82,7 @@ setLeaveTypeRefresh
           description: form.description,
           paid: form.paid,
           color: form.color,
-          companyId : user?.companyId?._id,
+          companyId,
         }
       );
     } else {
@@ -92,7 +94,7 @@ setLeaveTypeRefresh
           description: form.description,
           paid: form.paid,
           color: form.color,
-          companyId : user?.companyId?._id,
+          companyId,
         }
       );
     }
