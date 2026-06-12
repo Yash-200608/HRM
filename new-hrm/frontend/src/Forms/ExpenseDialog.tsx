@@ -14,6 +14,7 @@ import { formatDateFromInput } from "@/services/allFunctions";
 import CategoryDialog from "@/Forms/CategoryDialog";
 import { useAppDispatch, useAppSelector } from "@/redux-toolkit/hooks/hook";
 import { getExpenseCategory } from "@/redux-toolkit/slice/allPage/expenseSlice";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 const ExpenseDialog = ({
   isOpen,
@@ -24,6 +25,7 @@ const ExpenseDialog = ({
 }) => {
   // Reset form when dialog closes (optional)
   const { user } = useAuth();
+  const companyId = resolveCompanyIdFromUser(user);
   const { toast } = useToast();
   // const [categoriesList, setCategoriesList] = useState([]);
   const [expense, setExpense] = useState(null);
@@ -63,7 +65,7 @@ formData.append("amount", expense.amount);
 formData.append("category", expense.category);
 formData.append("paidBy", expense.paidBy);
 formData.append("notes", expense.notes || "");
-formData.append("companyId", user?.companyId?._id);
+if (companyId) formData.append("companyId", companyId);
 formData.append("userId", user?._id);
 
 if (expenseImage) {
@@ -124,7 +126,8 @@ if (expenseImage) {
 
   const handleGetCategory = async () => {
     try {
-      const res = await getExpenseCategories(user?.companyId?._id);
+      if (!companyId) return;
+      const res = await getExpenseCategories(companyId);
       if (res) { dispatch(getExpenseCategory(res)); }
     } catch (err) {
       console.log("Error fetching categories:", err);

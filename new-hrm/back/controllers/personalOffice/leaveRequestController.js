@@ -190,12 +190,12 @@ const getEmployeeLeaveSummary = async (req, res) => {
     });
 
     // ⏳ Pending leaves
-    const pendingLeave = leaves.filter(l => l.status.toLowerCase() === "pending").length;
+    const pendingLeave = leaves.filter((l) => String(l.status || "").toLowerCase() === "pending").length;
 
     // ✅ Approved leave days (current month)
     let approvedLeaveDays = 0;
     leaves
-      .filter(l => l.status.toLowerCase() === "approved")
+      .filter((l) => String(l.status || "").toLowerCase() === "approved")
       .forEach(l => {
         const from = new Date(l.fromDate) < startOfMonth ? startOfMonth : new Date(l.fromDate);
         const to = new Date(l.toDate) > endOfMonth ? endOfMonth : new Date(l.toDate);

@@ -35,6 +35,9 @@ import {
   getLearningCertificate,
   getEmployees,
 } from "@/services/Service";
+import { canAccessModule } from "@/lib/entitlements";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
+import { Link } from "react-router-dom";
 
 type QuizQuestionDraft = {
   prompt: string;
@@ -72,7 +75,8 @@ const Learning: React.FC = () => {
   const [quizSubmitting, setQuizSubmitting] = useState(false);
   const [certificate, setCertificate] = useState<any | null>(null);
 
-  const companyId = user?.companyId?._id || user?.companyId;
+  const companyId = resolveCompanyIdFromUser(user);
+  const learningEnabled = canAccessModule(user, "learning");
 
   const publishedCourses = useMemo(
     () => courses.filter((course) => course.status === "PUBLISHED"),
@@ -105,8 +109,12 @@ const Learning: React.FC = () => {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (learningEnabled) {
+      load();
+    } else {
+      setLoading(false);
+    }
+  }, [learningEnabled]);
 
   useEffect(() => {
     if (!quizCourseId) return;
@@ -281,6 +289,37 @@ const Learning: React.FC = () => {
       prev.map((q, i) => (i === index ? { ...q, ...patch } : q))
     );
   };
+
+  if (!learningEnabled) {
+    return (
+      <>
+        <Helmet>
+          <title>Learning | HRM</title>
+        </Helmet>
+        <div className="p-4 md:p-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5" />
+                Learning is not on your plan
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground">
+                Course management, quizzes, and certificates require the Learning Management
+                feature. Upgrade your subscription to unlock this module.
+              </p>
+              {user?.role === "admin" ? (
+                <Button asChild>
+                  <Link to="/billing">View plans</Link>
+                </Button>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  }
 
   if (loading) {
     return (

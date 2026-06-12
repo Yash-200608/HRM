@@ -22,3 +22,10 @@ export function resolveCompanyIdFromUser(user: {
 
   return resolveTenantRef(user.companyId) || resolveTenantRef(user.createdBy);
 }
+
+export function useCompanyId(user: {
+  companyId?: TenantRef;
+  createdBy?: TenantRef;
+} | null | undefined): string | null {
+  return resolveCompanyIdFromUser(user);
+}

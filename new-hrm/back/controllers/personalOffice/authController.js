@@ -19,6 +19,7 @@ const recentActivity = require("../../models/personalOffice/recentActivityModel.
 const { generateAccessToken, generateRefreshToken } = require("../../service/service.js")
 const { buildAccessTokenInput, buildUserSubscriptionFields } = require("../../service/tokenClaimsService.js");
 const { getAccountTypeFromRole } = require("../../service/sessionSecurityService.js");
+const { normalizeUserDataForClient } = require("../../service/authLoginService.js");
 const { SuperAdmin } = require("../../models/personalOffice/superadminModel");
 const {
   DEFAULT_USER_PREFERENCES,
@@ -424,7 +425,14 @@ const getSession = async (req, res) => {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
-    const sanitized = { ...sessionUser };
+    const accountType = getAccountTypeFromRole(sessionUser.role);
+    const sanitized = normalizeUserDataForClient(
+      {
+        ...sessionUser,
+        _id: sessionUser._id || sessionUser.id,
+      },
+      accountType
+    );
     delete sanitized.password;
     delete sanitized.refreshToken;
     delete sanitized.mfaSecret;
@@ -433,7 +441,6 @@ const getSession = async (req, res) => {
       authenticated: true,
       user: {
         ...sanitized,
-        _id: sanitized._id || sanitized.id,
         fullName: sanitized.fullName || sanitized.username || sanitized.name,
         entitlements: sanitized.entitlements || [],
         subscriptionPlan: sanitized.subscriptionPlan || null,

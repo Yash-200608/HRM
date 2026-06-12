@@ -360,7 +360,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
-    const needsRefresh = !user.subscriptionPlan;
+    const needsRefresh = !user.subscriptionPlan || !user.entitlements?.length;
 
     if (!needsRefresh) {
       return;
@@ -405,7 +405,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       getBillingOverview()
         .then((response) => {
           const data = response?.data?.data ?? response?.data;
-          if (!Array.isArray(data?.entitlements)) {
+          if (!Array.isArray(data?.entitlements) || data.entitlements.length === 0) {
+            return;
+          }
+
+          const currentEntitlements = user.entitlements ?? [];
+          const unchanged =
+            currentEntitlements.length === data.entitlements.length &&
+            currentEntitlements.every((item) => data.entitlements.includes(item));
+
+          if (unchanged) {
             return;
           }
 

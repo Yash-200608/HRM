@@ -16,6 +16,7 @@ import { useAppDispatch, useAppSelector } from "@/redux-toolkit/hooks/hook";
 import { getDepartment } from "@/redux-toolkit/slice/allPage/departmentSlice";
 import { socket } from "@/socket/socket";
 import {ValidateEmployeeForm} from "@/hook/EmployeeDialog";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 export const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
   open,
@@ -27,6 +28,7 @@ export const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
 }) => {
   
   const { user } = useAuth();
+  const companyId = resolveCompanyIdFromUser(user);
   const { toast } = useToast();
 
   const [formStep, setFormStep] = useState(1);
@@ -71,9 +73,9 @@ const [errors, setErrors] = useState<any>({})
 
 
   const handleGetDepartment = async () => {
-    if (!user?.companyId?._id) return;
+    if (!companyId) return;
     try {
-      const data = await getDepartments(user?.companyId?._id);
+      const data = await getDepartments(companyId);
       dispatch(getDepartment(data || []));
       setDepartmentRefresh(false);
     } catch (err: any) {
@@ -249,7 +251,9 @@ const [errors, setErrors] = useState<any>({})
 
       const formData = new FormData();
       formData.append("userId", user?._id || "");
-      formData.append("companyId", user?.companyId?._id || "");
+      if (companyId) {
+        formData.append("companyId", companyId);
+      }
       if (!isEditMode) formData.append("password", currentEmployee?.password || "");
       formData.append("id", currentEmployee?.id || "");
       formData.append("fullName", currentEmployee?.fullName || "");

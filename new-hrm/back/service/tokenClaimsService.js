@@ -91,12 +91,12 @@ async function resolveSubscriptionContext(organizationId) {
       .lean(),
   ]);
 
-  const subscriptionPlan = subscription?.planCode || company?.planCode || "free";
-  let entitlements = extractEntitlementsFromSnapshot(subscription?.featureSnapshot);
+  const subscriptionPlan = company?.planCode || subscription?.planCode || "free";
+  const planFeatures = await resolvePlanFeatureSnapshot(subscriptionPlan);
+  let entitlements = extractEntitlementsFromSnapshot(planFeatures);
 
   if (!entitlements.length) {
-    const planFeatures = await resolvePlanFeatureSnapshot(subscriptionPlan);
-    entitlements = extractEntitlementsFromSnapshot(planFeatures);
+    entitlements = extractEntitlementsFromSnapshot(subscription?.featureSnapshot);
   }
 
   return {

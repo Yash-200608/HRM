@@ -19,7 +19,10 @@ const {
 const { checkCanAddEmployee } = require("../../service/employeeLimitService.js");
 const { recordAuditEvent } = require("../../service/auditService.js");
 const { issueAuthCookies } = require("../../service/sessionSecurityService.js");
-const { resolveEffectiveCompanyId } = require("../../utils/authAccess.js");
+const {
+  assertCanUpdateUserProfile,
+  resolveEffectiveCompanyId,
+} = require("../../utils/authAccess.js");
 const { issueAuthenticatedSession } = require("../../service/authLoginService.js");
 const {
   recordLoginFailure,
@@ -438,14 +441,28 @@ console.log(req.body);
       return res.status(400).json({ message: "Employee ID is required" });
     }
 
-    if (!updates?.companyId) {
-      return res.status(403).json({ message: "you did not have permission to changes." });
+    const companyId = resolveEffectiveCompanyId(req, updates?.companyId);
+    if (!companyId) {
+      return res.status(403).json({ message: "Company context is required" });
     }
 
     const employee = await Employee.findById(id);
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
     }
+
+    if (!assertCanUpdateUserProfile(req, res, id, companyId)) {
+      return;
+    }
+
+    if (
+      req.user?.role !== "super_admin" &&
+      String(employee.createdBy) !== String(companyId)
+    ) {
+      return res.status(403).json({ message: "Access denied for this employee" });
+    }
+
+    updates.companyId = companyId;
 
     const previousStatus = employee.status;
 

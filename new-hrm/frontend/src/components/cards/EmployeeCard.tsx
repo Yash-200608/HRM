@@ -13,6 +13,7 @@ import SalarySlipCard from '@/components/cards/SalarySlipCard';
 import { cn } from '@/lib/utils';
 
 import { socket } from "@/socket/socket";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 export const formatClock = (time: string) => {
   if (!time) return "-";
@@ -67,7 +68,7 @@ const EmployeeDashboard = () => {
   const attendanceDateRef = useRef(null);
   const leaveDateRef = useRef(null);
 
-  const companyId = user?.companyId?._id;
+  const companyId = resolveCompanyIdFromUser(user);
 
 
 
@@ -116,11 +117,9 @@ async (
       singleUserData?._id
     );
 
-    formData.append(
-      "companyId",
-      user?.companyId?._id ||
-      user?.createdBy?._id
-    );
+    if (companyId) {
+      formData.append("companyId", companyId);
+    }
 
     formData.append(
       "adminId",
@@ -194,11 +193,11 @@ async (
     }
   };
   useEffect(() => {
-    if (user?.companyId?._id) {
+    if (companyId) {
       fetchAttendances(selectedDate);
       handleGetLeaveData(leaveSelectedDate);
     }
-  }, [user, selectedDate, leaveSelectedDate]);
+  }, [companyId, selectedDate, leaveSelectedDate]);
 
   const showSalarySlip = async () => {
     if (!singlePayrolls || singlePayrolls.length === 0) return toast({ title: "Slip Error", description: "Salary Slip Not Found.", variant: "destructive" })
@@ -207,7 +206,7 @@ async (
 
   const handleGetEmployee = async () => {
     try {
-      const data = await getEmployeebyId(id, user?.companyId?._id);
+      const data = await getEmployeebyId(id, companyId || undefined);
       if (data) {
         setSingleUserData(data.employee || null);
         setHistory(data.history || []);
@@ -302,9 +301,9 @@ async (
   }, []);
 
   const handleGetSinglePayRoll = async () => {
-    if (!id || !user?.companyId?._id) return;
+    if (!id || !companyId) return;
     try {
-      const data = await getSinglePayRoll(id, user?.companyId?._id);
+      const data = await getSinglePayRoll(id, companyId);
       if (Array.isArray(data)) {
         setSinglePayrolls(data);
       }
@@ -329,9 +328,10 @@ async (
   }, [employeeListRefresh]);
 
   useEffect(() => {
+    if (!user || !id) return;
     handleGetEmployee();
     GetPdfLetter(id);
-  }, []);
+  }, [user, id, companyId]);
 console.log("attendanceList => ", attendanceList);
   return (
   <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617]">

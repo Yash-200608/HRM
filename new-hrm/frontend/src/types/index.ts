@@ -24,8 +24,8 @@ export interface User {
   role: UserRole;
   joiningDate: string;
   avatar?: string;
-  companyId?: CompanyDetail;
-  createdBy?: CompanyDetail;
+  companyId?: string | CompanyDetail;
+  createdBy?: string | CompanyDetail;
   taskRole?: string;
   taskRoleStatus?: string;
   taskRoleDescription?: string;

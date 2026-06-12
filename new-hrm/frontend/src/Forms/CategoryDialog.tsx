@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import axios from "axios";
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from "@/contexts/AuthContext";
+import { resolveCompanyIdFromUser } from "@/lib/tenant";
 
 const CategoryDialog = ({
   isOpen,
@@ -22,6 +23,7 @@ setCategoryListRefersh,
   mode = false, // "add" or "edit"
 }) => {
     const { user } = useAuth();
+  const companyId = resolveCompanyIdFromUser(user);
   const [category, setCategory] = useState(initialData);
   const[isLoading,setIsLoading] = useState(false);
       const { toast } = useToast();
@@ -42,13 +44,13 @@ setCategoryListRefersh,
       // ===== UPDATE (PUT) =====
       res = await axios.put(
         `${import.meta.env.VITE_API_URL}/api/expense-categories/updateExpenseCategory/${category.id}`,
-        {...category, companyId : user?.companyId?._id}
+        {...category, companyId}
       );
     } else {
       // ===== CREATE (POST) =====
       res = await axios.post(
         `${import.meta.env.VITE_API_URL}/api/expense-categories/add`,
-         {...category, companyId : user?.companyId?._id}
+         {...category, companyId}
       );
     }
      if(res?.status === 201){
